@@ -446,7 +446,6 @@
                         :data="hotData.data"
                         :col-headers="colHeadersDisplay"
                         :read-only="true"
-                        :
                         :stretch-h="all"
                     >
                     </hot-table>
