@@ -15,11 +15,6 @@
                 </b-form-select-option>
             </b-form-select>
         </div>
-        <div id="license-selector">
-            <b>License</b>
-            <div class="dropdown-menu" role="menu">
-            </div>
-        </div>
         <div v-if="hasParameters" id="workflow-parameters-area" class="mt-2">
             <b>Parameters</b>
             <b-list-group>
