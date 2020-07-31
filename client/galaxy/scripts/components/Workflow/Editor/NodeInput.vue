@@ -25,6 +25,10 @@ export default {
             type: Function,
             required: true,
         },
+        datatypesMapper: {
+            type: Object,
+            required: true,
+        },
     },
     data() {
         return {
@@ -61,8 +65,8 @@ export default {
                 terminalClass = Terminals.InputParameterTerminal;
             }
             const terminal = new terminalClass({
-                app: this.getManager(),
                 node: this.getNode(),
+                datatypesMapper: this.datatypesMapper,
                 name: input.name,
                 input: input,
                 element: this.$refs.terminal,

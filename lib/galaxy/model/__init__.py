@@ -712,6 +712,7 @@ class Job(JobLike, UsesCreateAndUpdateTime, Dictifiable, RepresentById):
         self.input_datasets = []
         self.output_datasets = []
         self.input_dataset_collections = []
+        self.input_dataset_collection_elements = []
         self.output_dataset_collection_instances = []
         self.output_dataset_collections = []
         self.input_library_datasets = []
@@ -933,6 +934,9 @@ class Job(JobLike, UsesCreateAndUpdateTime, Dictifiable, RepresentById):
     def add_input_dataset_collection(self, name, dataset_collection):
         self.input_dataset_collections.append(JobToInputDatasetCollectionAssociation(name, dataset_collection))
 
+    def add_input_dataset_collection_element(self, name, dataset_collection_element):
+        self.input_dataset_collection_elements.append(JobToInputDatasetCollectionElementAssociation(name, dataset_collection_element))
+
     def add_output_dataset_collection(self, name, dataset_collection_instance):
         self.output_dataset_collection_instances.append(JobToOutputDatasetCollectionAssociation(name, dataset_collection_instance))
 
@@ -1066,7 +1070,7 @@ class Job(JobLike, UsesCreateAndUpdateTime, Dictifiable, RepresentById):
             params_objects[key] = safe_loads(param_dict[key])
 
         def remap_objects(p, k, obj):
-            if isinstance(obj, dict) and "src" in obj and obj["src"] in ["hda", "hdca"]:
+            if isinstance(obj, dict) and "src" in obj and obj["src"] in ["hda", "hdca", "dce"]:
                 new_id = serialization_options.get_identifier_for_id(id_encoder, obj["id"])
                 new_obj = obj.copy()
                 new_obj["id"] = new_id
@@ -1433,6 +1437,12 @@ class JobToInputDatasetCollectionAssociation(RepresentById):
         self.dataset_collection = dataset_collection
 
 
+class JobToInputDatasetCollectionElementAssociation(RepresentById):
+    def __init__(self, name, dataset_collection_element):
+        self.name = name
+        self.dataset_collection_element = dataset_collection_element
+
+
 # Many jobs may map to one HistoryDatasetCollection using these for a given
 # tool output (if mapping over an input collection).
 class JobToOutputDatasetCollectionAssociation(RepresentById):
@@ -1755,9 +1765,10 @@ class History(HasTags, Dictifiable, UsesAnnotations, HasName, RepresentById):
             dataset = HistoryDatasetAssociation(dataset=dataset)
             object_session(self).add(dataset)
             object_session(self).flush()
-        elif not isinstance(dataset, HistoryDatasetAssociation):
-            raise TypeError("You can only add Dataset and HistoryDatasetAssociation instances to a history" +
-                            " ( you tried to add %s )." % str(dataset))
+        elif not isinstance(dataset, (HistoryDatasetAssociation, HistoryDatasetCollectionAssociation)):
+            raise TypeError("You can only add Dataset and HistoryDatasetAssociation instances to a history"
+                            + " ( you tried to add %s )." % str(dataset))
+        is_dataset = is_hda(dataset)
         if parent_id:
             for data in self.datasets:
                 if data.id == parent_id:
@@ -1769,24 +1780,23 @@ class History(HasTags, Dictifiable, UsesAnnotations, HasName, RepresentById):
         else:
             if set_hid:
                 dataset.hid = self._next_hid()
-        if quota and self.user:
+        if quota and is_dataset and self.user:
             self.user.adjust_total_disk_usage(dataset.quota_amount(self.user))
         dataset.history = self
-        if genome_build not in [None, '?']:
+        if is_dataset and genome_build not in [None, '?']:
             self.genome_build = genome_build
         dataset.history_id = self.id
         return dataset
 
     def add_datasets(self, sa_session, datasets, parent_id=None, genome_build=None, set_hid=True, quota=True, flush=False):
         """ Optimized version of add_dataset above that minimizes database
-        interactions when adding many datasets to history at once.
+        interactions when adding many datasets and collections to history at once.
         """
-        all_hdas = all(is_hda(_) for _ in datasets)
-        optimize = len(datasets) > 1 and parent_id is None and all_hdas and set_hid
+        optimize = len(datasets) > 1 and parent_id is None and set_hid
         if optimize:
             self.__add_datasets_optimized(datasets, genome_build=genome_build)
             if quota and self.user:
-                disk_usage = sum([d.get_total_size() for d in datasets])
+                disk_usage = sum([d.get_total_size() for d in datasets if is_hda(d)])
                 self.user.adjust_total_disk_usage(disk_usage)
             sa_session.add_all(datasets)
             if flush:
@@ -1811,7 +1821,7 @@ class History(HasTags, Dictifiable, UsesAnnotations, HasName, RepresentById):
             dataset.hid = base_hid + i
             dataset.history = self
             dataset.history_id = cached_id(self)
-            if set_genome:
+            if set_genome and is_hda(dataset):
                 self.genome_build = genome_build
         return datasets
 
@@ -1852,7 +1862,7 @@ class History(HasTags, Dictifiable, UsesAnnotations, HasName, RepresentById):
             hdas = self.active_datasets
         for hda in hdas:
             # Copy HDA.
-            new_hda = hda.copy(force_flush=False)
+            new_hda = hda.copy(flush=False)
             new_history.add_dataset(new_hda, set_hid=False, quota=applies_to_quota)
 
             if target_user:
@@ -2742,8 +2752,8 @@ class DatasetInstance(object):
             # extension is None
             return 'data'
 
-    def set_peek(self):
-        return self.datatype.set_peek(self)
+    def set_peek(self, **kwd):
+        return self.datatype.set_peek(self, **kwd)
 
     def init_meta(self, copy_from=None):
         return self.datatype.init_meta(self, copy_from=copy_from)
@@ -3110,7 +3120,7 @@ class HistoryDatasetAssociation(DatasetInstance, HasTags, Dictifiable, UsesAnnot
             self.version = self.version + 1 if self.version else 1
             session.add(past_hda)
 
-    def copy(self, parent_id=None, copy_tags=None, force_flush=True, copy_hid=True, new_name=None):
+    def copy(self, parent_id=None, copy_tags=None, flush=True, copy_hid=True, new_name=None):
         """
         Create a copy of this HDA.
         """
@@ -3147,7 +3157,7 @@ class HistoryDatasetAssociation(DatasetInstance, HasTags, Dictifiable, UsesAnnot
                 object_session(self).flush([self])
 
             hda.set_peek()
-        if force_flush:
+        if flush:
             object_session(self).flush()
         return hda
 
@@ -3368,8 +3378,8 @@ class HistoryDatasetAssociation(DatasetInstance, HasTags, Dictifiable, UsesAnnot
 
     @type_id.expression
     def type_id(cls):
-        return ((type_coerce(cls.content_type, types.Unicode) + u'-' +
-                 type_coerce(cls.id, types.Unicode)).label('type_id'))
+        return ((type_coerce(cls.content_type, types.Unicode) + u'-'
+                 + type_coerce(cls.id, types.Unicode)).label('type_id'))
 
 
 class HistoryDatasetAssociationHistory(RepresentById):
@@ -4120,7 +4130,7 @@ class DatasetCollection(Dictifiable, UsesAnnotations, RepresentById):
         error_message = "Dataset collection has no %s with key %s." % (get_by_attribute, key)
         raise KeyError(error_message)
 
-    def copy(self, destination=None, element_destination=None):
+    def copy(self, destination=None, element_destination=None, flush=True):
         new_collection = DatasetCollection(
             collection_type=self.collection_type,
             element_count=self.element_count
@@ -4130,6 +4140,7 @@ class DatasetCollection(Dictifiable, UsesAnnotations, RepresentById):
                 new_collection,
                 destination=destination,
                 element_destination=element_destination,
+                flush=flush
             )
         object_session(self).add(new_collection)
         object_session(self).flush()
@@ -4277,8 +4288,8 @@ class HistoryDatasetCollectionAssociation(DatasetCollectionInstance,
 
     @type_id.expression
     def type_id(cls):
-        return ((type_coerce(cls.content_type, types.Unicode) + u'-' +
-                 type_coerce(cls.id, types.Unicode)).label('type_id'))
+        return ((type_coerce(cls.content_type, types.Unicode) + u'-'
+                 + type_coerce(cls.id, types.Unicode)).label('type_id'))
 
     @property
     def job_source_type(self):
@@ -4537,16 +4548,17 @@ class DatasetCollectionElement(Dictifiable, RepresentById):
         else:
             return [element_object]
 
-    def copy_to_collection(self, collection, destination=None, element_destination=None):
+    def copy_to_collection(self, collection, destination=None, element_destination=None, flush=True):
         element_object = self.element_object
         if element_destination:
             if self.is_collection:
                 element_object = element_object.copy(
                     destination=destination,
-                    element_destination=element_destination
+                    element_destination=element_destination,
+                    flush=flush
                 )
             else:
-                new_element_object = element_object.copy()
+                new_element_object = element_object.copy(flush=flush)
                 if destination is not None and element_object.hidden_beneath_collection_instance:
                     new_element_object.hidden_beneath_collection_instance = destination
                 # Ideally we would not need to give the following
@@ -5288,6 +5300,8 @@ class WorkflowInvocation(UsesCreateAndUpdateTime, Dictifiable, RepresentById):
             for step in self.steps:
                 if step.workflow_step.type == 'tool':
                     for job in step.jobs:
+                        if job is None:
+                            continue
                         for step_input in step.workflow_step.input_connections:
                             output_step_type = step_input.output_step.type
                             if output_step_type in ['data_input', 'data_collection_input']:
@@ -5929,11 +5943,11 @@ class CloudAuthz(RepresentById):
         return not self.__eq__(other)
 
     def equals(self, user_id, provider, authn_id, config):
-        return (self.user_id == user_id and
-                self.provider == provider and
-                self.authn_id == authn_id and
-                len({k: self.config[k] for k in self.config if k in config and
-                     self.config[k] == config[k]}) == len(self.config))
+        return (self.user_id == user_id
+                and self.provider == provider
+                and self.authn_id == authn_id
+                and len({k: self.config[k] for k in self.config if k in config
+                         and self.config[k] == config[k]}) == len(self.config))
 
 
 class Page(Dictifiable, RepresentById):

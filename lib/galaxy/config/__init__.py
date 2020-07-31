@@ -786,6 +786,7 @@ class GalaxyAppConfiguration(BaseAppConfiguration, CommonConfigurationMixin):
             job_config_file=[self._in_config_dir('job_conf.xml')],
             job_metrics_config_file=[self._in_config_dir('job_metrics_conf.xml'), self._in_sample_dir('job_metrics_conf.xml.sample')],
             job_resource_params_file=[self._in_config_dir('job_resource_params_conf.xml')],
+            file_sources_config_file=[self._in_config_dir('file_sources_conf.yml')],
             local_conda_mapping_file=[self._in_config_dir('local_conda_mapping.yml')],
             migrated_tools_config=[self._in_managed_config_dir('migrated_tools_conf.xml')],
             modules_mapping_files=[self._in_config_dir('environment_modules_mapping.yml')],
@@ -1031,7 +1032,7 @@ class ConfiguresGalaxyMixin(object):
         self._toolbox_lock = threading.RLock()
         self.toolbox = tools.ToolBox(self.config.tool_configs, self.config.tool_path, self)
         galaxy_root_dir = os.path.abspath(self.config.root)
-        file_path = os.path.abspath(getattr(self.config, "file_path"))
+        file_path = os.path.abspath(self.config.file_path)
         app_info = AppInfo(
             galaxy_root_dir=galaxy_root_dir,
             default_file_path=file_path,

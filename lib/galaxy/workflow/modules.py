@@ -488,7 +488,6 @@ class SubWorkflowModule(WorkflowModule):
                     for data_output in data_outputs:
                         data_output_uuid = data_output.get('uuid') or object()
                         if data_output['name'] == workflow_output['output_name'] or data_output_uuid == workflow_output_uuid:
-                            data_output['label'] = label
                             data_output['name'] = label
                             # That's the right data_output
                             break
@@ -661,7 +660,7 @@ class InputModule(WorkflowModule):
         if "format" in state:
             formats = state["format"]
             if formats:
-                formats = ",".join(formats)
+                formats = ",".join(listify(formats))
                 state["format"] = formats
         state = json.dumps(state)
         return state
@@ -998,7 +997,7 @@ class InputParameterModule(WorkflowModule):
                     intxn_vals = set.intersection(*({option[1] for option in options} for options in static_options))
                     intxn_opts = {option for options in static_options for option in options if option[1] in intxn_vals}
                     d = defaultdict(set)  # Collapse labels with same values
-                    for label, value, selected in intxn_opts:
+                    for label, value, _ in intxn_opts:
                         d[value].add(label)
                     options = [{"label": ', '.join(label), "value": value, "selected": False} for value, label in d.items()]
 
@@ -1710,7 +1709,7 @@ class ToolModule(WorkflowModule):
                 visit_input_values(tool.inputs, execution_state.inputs, callback, no_replacement_value=NO_REPLACEMENT, replace_optional_connections=True)
             except KeyError as k:
                 message_template = "Error due to input mapping of '%s' in '%s'.  A common cause of this is conditional outputs that cannot be determined until runtime, please review your workflow."
-                message = message_template % (tool.name, k.message)
+                message = message_template % (tool.name, unicodify(k))
                 raise exceptions.MessageException(message)
 
             unmatched_input_connections = expected_replacement_keys - found_replacement_keys
@@ -1802,17 +1801,16 @@ class ToolModule(WorkflowModule):
 
         # Combine workflow and runtime post job actions into the effective post
         # job actions for this execution.
-        flush_required = False
         effective_post_job_actions = self._effective_post_job_actions(step)
         for pja in effective_post_job_actions:
             if pja.action_type in ActionBox.immediate_actions or isinstance(self.tool, DatabaseOperationTool):
                 ActionBox.execute(self.trans.app, self.trans.sa_session, pja, job, replacement_dict)
             else:
-                pjaa = model.PostJobActionAssociation(pja, job_id=job.id)
+                if job.id:
+                    pjaa = model.PostJobActionAssociation(pja, job_id=job.id)
+                else:
+                    pjaa = model.PostJobActionAssociation(pja, job=job)
                 self.trans.sa_session.add(pjaa)
-                flush_required = True
-        if flush_required:
-            self.trans.sa_session.flush()
 
     def __restore_step_meta_runtime_state(self, step_runtime_state):
         if RUNTIME_POST_JOB_ACTIONS_KEY in step_runtime_state:

@@ -1,24 +1,13 @@
 import axios from "axios";
 import { rethrowSimple } from "utils/simple-error";
 import { getAppRoot } from "onload/loadConfig";
+import { fromSimple, toSimple } from "./model";
 
 /** Workflow data request helper **/
 export async function getVersions(id) {
     try {
         const { data } = await axios.get(`${getAppRoot()}api/workflows/${id}/versions`);
         return data;
-    } catch (e) {
-        rethrowSimple(e);
-    }
-}
-
-export async function getDatatypes() {
-    try {
-        const datatypesRequest = await axios.get(`${getAppRoot()}api/datatypes`);
-        const datatypes = datatypesRequest.data;
-        const mappingRequest = await axios.get(`${getAppRoot()}api/datatypes/mapping`);
-        const datatypes_mapping = mappingRequest.data;
-        return { datatypes, datatypes_mapping };
     } catch (e) {
         rethrowSimple(e);
     }
@@ -37,7 +26,7 @@ export async function loadWorkflow(workflow, id, version, appendData) {
     try {
         const versionQuery = version ? `version=${version}` : "";
         const { data } = await axios.get(`${getAppRoot()}workflow/load_workflow?_=true&id=${id}&${versionQuery}`);
-        workflow.fromSimple(data, appendData);
+        fromSimple(workflow, data, appendData);
         return data;
     } catch (e) {
         console.debug(e);
@@ -45,15 +34,15 @@ export async function loadWorkflow(workflow, id, version, appendData) {
     }
 }
 
-export async function saveWorkflow(workflow, id) {
-    if (workflow.has_changes) {
+export async function saveWorkflow(workflow) {
+    if (workflow.hasChanges) {
         try {
-            const requestData = { workflow: workflow.toSimple(), from_tool_form: true };
-            const { data } = await axios.put(`${getAppRoot()}api/workflows/${id}`, requestData);
+            const requestData = { workflow: toSimple(workflow), from_tool_form: true };
+            const { data } = await axios.put(`${getAppRoot()}api/workflows/${workflow.id}`, requestData);
             workflow.name = data.name;
-            workflow.has_changes = false;
+            workflow.hasChanges = false;
             workflow.stored = true;
-            workflow.workflow_version = data.version;
+            workflow.version = data.version;
             return data;
         } catch (e) {
             rethrowSimple(e);

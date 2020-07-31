@@ -3,6 +3,7 @@ File format detector
 """
 from __future__ import absolute_import
 
+import bz2
 import codecs
 import gzip
 import io
@@ -33,11 +34,6 @@ from galaxy.util.checkers import (
     is_tar,
 )
 
-if sys.version_info < (3, 3):
-    import bz2file as bz2
-else:
-    import bz2
-
 log = logging.getLogger(__name__)
 
 SNIFF_PREFIX_BYTES = int(os.environ.get("GALAXY_SNIFF_PREFIX_BYTES", None) or 2 ** 20)
@@ -50,10 +46,17 @@ def get_test_fname(fname):
     return full_path
 
 
-def stream_url_to_file(path):
-    page = urlopen(path)  # page will be .close()ed in stream_to_file
-    temp_name = stream_to_file(page, prefix='url_paste', source_encoding=util.get_charset_from_http_headers(page.headers))
-    return temp_name
+def stream_url_to_file(path, file_sources=None):
+    prefix = "url_paste"
+    if file_sources and file_sources.looks_like_uri(path):
+        file_source_path = file_sources.get_file_source_path(path)
+        _, temp_name = tempfile.mkstemp(prefix=prefix)
+        file_source_path.file_source.realize_to(file_source_path.path, temp_name)
+        return temp_name
+    else:
+        page = urlopen(path)  # page will be .close()ed in stream_to_file
+        temp_name = stream_to_file(page, prefix=prefix, source_encoding=util.get_charset_from_http_headers(page.headers))
+        return temp_name
 
 
 def stream_to_open_named_file(stream, fd, filename, source_encoding=None, source_error='strict', target_encoding=None, target_error='strict'):
@@ -92,6 +95,21 @@ def stream_to_file(stream, suffix='', prefix='', dir=None, text=False, **kwd):
     """Writes a stream to a temporary file, returns the temporary file's name"""
     fd, temp_name = tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=dir, text=text)
     return stream_to_open_named_file(stream, fd, temp_name, **kwd)
+
+
+def handle_composite_file(datatype, src_path, extra_files, name, is_binary, tmp_dir, tmp_prefix, upload_opts):
+    if not is_binary:
+        if upload_opts.get('space_to_tab'):
+            convert_newlines_sep2tabs(src_path, tmp_dir=tmp_dir, tmp_prefix=tmp_prefix)
+        else:
+            convert_newlines(src_path, tmp_dir=tmp_dir, tmp_prefix=tmp_prefix)
+
+    file_output_path = os.path.join(extra_files, name)
+    shutil.move(src_path, file_output_path)
+
+    # groom the dataset file content if required by the corresponding datatype definition
+    if datatype and datatype.dataset_content_needs_grooming(file_output_path):
+        datatype.groom_dataset_content(file_output_path)
 
 
 def convert_newlines(fname, in_place=True, tmp_dir=None, tmp_prefix="gxupload", block_size=128 * 1024, regexp=None):
@@ -488,7 +506,7 @@ def run_sniffers_raw(filename_or_file_prefix, sniff_order, is_binary=False):
                     continue
                 if not datatype_compressed and file_prefix.compressed_format:
                     continue
-                if file_prefix.compressed_format and getattr(datatype, "compressed_format"):
+                if file_prefix.compressed_format and getattr(datatype, "compressed_format", None):
                     # In this case go a step further and compare the compressed format detected
                     # to the expected.
                     if file_prefix.compressed_format != datatype.compressed_format:
@@ -642,9 +660,10 @@ def handle_compressed_file(
     is_valid = False
     uncompressed = filename
     tmp_dir = tmp_dir or os.path.dirname(filename)
-    for compressed_type, check_compressed_function in COMPRESSION_CHECK_FUNCTIONS:
+    for key, check_compressed_function in COMPRESSION_CHECK_FUNCTIONS:
         is_compressed, is_valid = check_compressed_function(filename, check_content=check_content)
         if is_compressed:
+            compressed_type = key
             break  # found compression type
     if is_compressed and is_valid:
         if ext in AUTO_DETECT_EXTENSIONS:

@@ -295,7 +295,10 @@ class ToolBox(BaseGalaxyToolBox):
 
     def create_tool(self, config_file, tool_cache_data_dir=None, **kwds):
         cache = self.get_cache_region(tool_cache_data_dir or self.app.config.tool_cache_data_dir)
-        tool_source = cache.get_or_create(config_file, creator=self.get_expanded_tool_source, expiration_time=-1, creator_args=((config_file,), {}))
+        if config_file.endswith('.xml'):
+            tool_source = cache.get_or_create(config_file, creator=self.get_expanded_tool_source, expiration_time=-1, creator_args=((config_file,), {}))
+        else:
+            tool_source = self.get_expanded_tool_source(config_file)
         tool = self._create_tool_from_source(tool_source, config_file=config_file, **kwds)
         if not self.app.config.delay_tool_initialization:
             tool.assert_finalized(raise_if_invalid=True)
@@ -966,7 +969,13 @@ class Tool(Dictifiable):
                 filename = inputs_elem.get("filename", None)
                 format = inputs_elem.get("format", "json")
                 data_style = inputs_elem.get("data_style", "skip")
-                content = dict(format=format, handle_files=data_style)
+                content = dict(format=format, handle_files=data_style, type="inputs")
+                self.config_files.append((name, filename, content))
+            file_sources_elem = conf_parent_elem.find("file_sources")
+            if file_sources_elem is not None:
+                name = file_sources_elem.get("name")
+                filename = file_sources_elem.get("filename", None)
+                content = dict(type="files")
                 self.config_files.append((name, filename, content))
             for conf_elem in conf_parent_elem.findall("configfile"):
                 name = conf_elem.get("name")
@@ -1581,13 +1590,13 @@ class Tool(Dictifiable):
                         output_collections=execution_tracker.output_collections,
                         implicit_collections=execution_tracker.implicit_collections)
 
-    def handle_single_execution(self, trans, rerun_remap_job_id, execution_slice, history, execution_cache=None, completed_job=None, collection_info=None):
+    def handle_single_execution(self, trans, rerun_remap_job_id, execution_slice, history, execution_cache=None, completed_job=None, collection_info=None, flush_job=True):
         """
         Return a pair with whether execution is successful as well as either
         resulting output data or an error message indicating the problem.
         """
         try:
-            job, out_data = self.execute(
+            rval = self.execute(
                 trans,
                 incoming=execution_slice.param_combination,
                 history=history,
@@ -1596,8 +1605,14 @@ class Tool(Dictifiable):
                 dataset_collection_elements=execution_slice.dataset_collection_elements,
                 completed_job=completed_job,
                 collection_info=collection_info,
+                flush_job=flush_job,
             )
-        except webob.exc.HTTPFound as e:
+            job = rval[0]
+            out_data = rval[1]
+            if len(rval) == 4:
+                execution_slice.datasets_to_persist = rval[2]
+                execution_slice.history = rval[3]
+        except (webob.exc.HTTPFound, exceptions.MessageException) as e:
             # if it's a webob redirect exception, pass it up the stack
             raise e
         except ToolInputsNotReadyException as e:
@@ -2136,7 +2151,7 @@ class Tool(Dictifiable):
             'requirements'  : [{'name' : r.name, 'version' : r.version} for r in self.requirements],
             'errors'        : state_errors,
             'tool_errors'   : self.tool_errors,
-            'state_inputs'  : params_to_strings(self.inputs, state_inputs, self.app),
+            'state_inputs'  : params_to_strings(self.inputs, state_inputs, self.app, use_security=True, nested=True),
             'job_id'        : trans.security.encode_id(job.id) if job else None,
             'job_remap'     : self._get_job_remap(job),
             'history_id'    : trans.security.encode_id(history.id) if history else None,
@@ -2899,7 +2914,7 @@ class MergeCollectionTool(DatabaseOperationTool):
         new_elements = OrderedDict()
         for key, value in new_element_structure.items():
             if getattr(value, "history_content_type", None) == "dataset":
-                copied_value = value.copy(force_flush=False)
+                copied_value = value.copy(flush=False)
             else:
                 copied_value = value.copy()
             new_elements[key] = copied_value
@@ -2917,7 +2932,7 @@ class FilterDatasetsTool(DatabaseOperationTool):
         for dce in elements_to_copy:
             element_identifier = dce.element_identifier
             if getattr(dce.element_object, "history_content_type", None) == "dataset":
-                copied_value = dce.element_object.copy(force_flush=False)
+                copied_value = dce.element_object.copy(flush=False)
             else:
                 copied_value = dce.element_object.copy()
             new_elements[element_identifier] = copied_value
@@ -2992,7 +3007,7 @@ class FlattenTool(DatabaseOperationTool):
                 if dce.is_collection:
                     add_elements(dce_object, prefix=identifier)
                 else:
-                    copied_dataset = dce_object.copy(force_flush=False)
+                    copied_dataset = dce_object.copy(flush=False)
                     new_elements[identifier] = copied_dataset
                     copied_datasets.append(copied_dataset)
 
@@ -3038,7 +3053,7 @@ class SortTool(DatabaseOperationTool):
 
         for dce in sorted_elements:
             dce_object = dce.element_object
-            copied_dataset = dce_object.copy(force_flush=False)
+            copied_dataset = dce_object.copy(flush=False)
             new_elements[dce.element_identifier] = copied_dataset
 
         self._add_datasets_to_history(history, itervalues(new_elements))
@@ -3062,7 +3077,7 @@ class RelabelFromFileTool(DatabaseOperationTool):
             if new_label in new_elements:
                 raise Exception("New identifier [%s] appears twice in resulting collection, these values must be unique." % new_label)
             if getattr(dce_object, "history_content_type", None) == "dataset":
-                copied_value = dce_object.copy(force_flush=False)
+                copied_value = dce_object.copy(flush=False)
             else:
                 copied_value = dce_object.copy()
             new_elements[new_label] = copied_value
@@ -3108,7 +3123,7 @@ class ApplyRulesTool(DatabaseOperationTool):
         copied_datasets = []
 
         def copy_dataset(dataset):
-            copied_dataset = dataset.copy(force_flush=False)
+            copied_dataset = dataset.copy(flush=False)
             copied_datasets.append(copied_dataset)
             return copied_dataset
 
@@ -3134,7 +3149,7 @@ class TagFromFileTool(DatabaseOperationTool):
 
         def add_copied_value_to_new_elements(new_tags_dict, dce):
             if getattr(dce.element_object, "history_content_type", None) == "dataset":
-                copied_value = dce.element_object.copy(force_flush=False)
+                copied_value = dce.element_object.copy(flush=False)
                 # copy should never be visible, since part of a collection
                 copied_value.visble = False
                 new_datasets.append(copied_value)
@@ -3205,7 +3220,7 @@ class FilterFromFileTool(DatabaseOperationTool):
             passes_filter = in_filter_file if how_filter == "remove_if_absent" else not in_filter_file
 
             if getattr(dce_object, "history_content_type", None) == "dataset":
-                copied_value = dce_object.copy(force_flush=False)
+                copied_value = dce_object.copy(flush=False)
             else:
                 copied_value = dce_object.copy()
 

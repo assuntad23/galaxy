@@ -26,6 +26,7 @@ from galaxy.util.dictifiable import Dictifiable
 from galaxy.util.expressions import ExpressionContext
 
 log = logging.getLogger(__name__)
+URI_PREFIXES = ["%s://" % x for x in ["http", "https", "ftp", "file", "gxfiles", "gximport", "gxuserimport", "gxftp"]]
 
 
 class Group(Dictifiable):
@@ -39,7 +40,7 @@ class Group(Dictifiable):
     def visible(self):
         return True
 
-    def value_to_basic(self, value, app):
+    def value_to_basic(self, value, app, use_security=False):
         """
         Convert value to a (possibly nested) representation using only basic
         types (dict, list, tuple, string_types, int, long, float, bool, None)
@@ -85,7 +86,7 @@ class Repeat(Group):
     def label(self):
         return "Repeat (%s)" % self.title
 
-    def value_to_basic(self, value, app):
+    def value_to_basic(self, value, app, use_security=False):
         rval = []
         for d in value:
             rval_dict = {}
@@ -94,7 +95,7 @@ class Repeat(Group):
                 rval_dict['__index__'] = d['__index__']
             for input in self.inputs.values():
                 if input.name in d:
-                    rval_dict[input.name] = input.value_to_basic(d[input.name], app)
+                    rval_dict[input.name] = input.value_to_basic(d[input.name], app, use_security)
             rval.append(rval_dict)
         return rval
 
@@ -159,11 +160,11 @@ class Section(Group):
     def label(self):
         return "Section (%s)" % self.title
 
-    def value_to_basic(self, value, app):
+    def value_to_basic(self, value, app, use_security=False):
         rval = {}
         for input in self.inputs.values():
             if input.name in value:  # parameter might be absent in unverified workflow
-                rval[input.name] = input.value_to_basic(value[input.name], app)
+                rval[input.name] = input.value_to_basic(value[input.name], app, use_security)
         return rval
 
     def value_from_basic(self, value, app, ignore_errors=False):
@@ -277,7 +278,7 @@ class UploadDataset(Group):
             return "Extra primary file"
         return None
 
-    def value_to_basic(self, value, app):
+    def value_to_basic(self, value, app, use_security=False):
         rval = []
         for d in value:
             rval_dict = {}
@@ -286,7 +287,7 @@ class UploadDataset(Group):
                 rval_dict['__index__'] = d['__index__']
             for input in self.inputs.values():
                 if input.name in d:
-                    rval_dict[input.name] = input.value_to_basic(d[input.name], app)
+                    rval_dict[input.name] = input.value_to_basic(d[input.name], app, use_security)
             rval.append(rval_dict)
         return rval
 
@@ -352,9 +353,9 @@ class UploadDataset(Group):
                 url_paste = open(url_paste_file, 'r').read()
 
                 def start_of_url(content):
-                    start_of_url_paste = content.lstrip()[0:8].lower()
+                    start_of_url_paste = content.lstrip()[0:10].lower()
                     looks_like_url = False
-                    for url_prefix in ["http://", "https://", "ftp://", "file://"]:
+                    for url_prefix in URI_PREFIXES:
                         if start_of_url_paste.startswith(url_prefix):
                             looks_like_url = True
                             break
@@ -659,13 +660,13 @@ class Conditional(Group):
                 return index
         raise ValueError("No case matched value:", self.name, str_value)
 
-    def value_to_basic(self, value, app):
+    def value_to_basic(self, value, app, use_security=False):
         rval = dict()
         rval[self.test_param.name] = self.test_param.value_to_basic(value[self.test_param.name], app)
         current_case = rval['__current_case__'] = self.get_current_case(value[self.test_param.name])
         for input in self.cases[current_case].inputs.values():
             if input.name in value:  # parameter might be absent in unverified workflow
-                rval[input.name] = input.value_to_basic(value[input.name], app)
+                rval[input.name] = input.value_to_basic(value[input.name], app, use_security=use_security)
         return rval
 
     def value_from_basic(self, value, app, ignore_errors=False):

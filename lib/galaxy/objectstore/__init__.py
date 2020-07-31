@@ -15,10 +15,6 @@ import time
 from collections import OrderedDict
 
 import yaml
-try:
-    from sqlalchemy.orm import object_session
-except ImportError:
-    object_session = None
 
 from galaxy.exceptions import ObjectInvalid, ObjectNotFound
 from galaxy.util import (
@@ -39,8 +35,7 @@ NO_SESSION_ERROR_MESSAGE = "Attempted to 'create' object store entity in configu
 log = logging.getLogger(__name__)
 
 
-class ObjectStore(object):
-    __metaclass__ = abc.ABCMeta
+class ObjectStore(object, metaclass=abc.ABCMeta):
 
     """ObjectStore interface.
 
@@ -311,7 +306,7 @@ class ConcreteObjectStore(BaseObjectStore):
     sense for the delegating object stores.
     """
 
-    def __init__(self, config, config_dict={}, **kwargs):
+    def __init__(self, config, config_dict=None, **kwargs):
         """
         :type config: object
         :param config: An object, most likely populated from
@@ -324,6 +319,8 @@ class ConcreteObjectStore(BaseObjectStore):
               parent directory those directories will be created.
             * new_file_path -- Used to set the 'temp' extra_dir.
         """
+        if config_dict is None:
+            config_dict = {}
         super(ConcreteObjectStore, self).__init__(config=config, config_dict=config_dict, **kwargs)
         self.store_by = config_dict.get("store_by", None) or getattr(config, "object_store_store_by", "id")
 
@@ -676,7 +673,7 @@ class NestedObjectStore(BaseObjectStore):
     def _call_method(self, method, obj, default, default_is_exception,
             **kwargs):
         """Check all children object stores for the first one with the dataset."""
-        for key, store in self.backends.items():
+        for store in self.backends.values():
             if store.exists(obj, **kwargs):
                 return store.__getattribute__(method)(obj, **kwargs)
         if default_is_exception:
@@ -731,7 +728,7 @@ class DistributedObjectStore(NestedObjectStore):
             self.backends[backened_id] = backend
             self.max_percent_full[backened_id] = maxpctfull
 
-            for i in range(0, weight):
+            for _ in range(0, weight):
                 # The simplest way to do weighting: add backend ids to a
                 # sequence the number of times equalling weight, then randomly
                 # choose a backend from that sequence at creation
@@ -838,7 +835,6 @@ class DistributedObjectStore(NestedObjectStore):
                     raise ObjectInvalid('objectstore.create, could not generate '
                                         'obj.object_store_id: %s, kwargs: %s'
                                         % (str(obj), str(kwargs)))
-                _create_object_in_session(obj)
                 log.debug("Selected backend '%s' for creation of %s %s"
                           % (obj.object_store_id, obj.__class__.__name__, obj.id))
             else:
@@ -871,7 +867,6 @@ class DistributedObjectStore(NestedObjectStore):
                 log.warning('%s object with ID %s found in backend object store with ID %s'
                             % (obj.__class__.__name__, obj.id, id))
                 obj.object_store_id = id
-                _create_object_in_session(obj)
                 return id
         return None
 
@@ -911,7 +906,7 @@ class HierarchicalObjectStore(NestedObjectStore):
     def to_dict(self):
         as_dict = super(HierarchicalObjectStore, self).to_dict()
         backends = []
-        for backend_id, backend in self.backends.items():
+        for backend in self.backends.values():
             backend_as_dict = backend.to_dict()
             backends.append(backend_as_dict)
         as_dict["backends"] = backends
@@ -1068,15 +1063,6 @@ def config_to_dict(config):
         'object_store_cache_path': config.object_store_cache_path,
         'gid': config.gid,
     }
-
-
-def _create_object_in_session(obj):
-    session = object_session(obj) if object_session is not None else None
-    if session is not None:
-        object_session(obj).add(obj)
-        object_session(obj).flush()
-    else:
-        raise Exception(NO_SESSION_ERROR_MESSAGE)
 
 
 class ObjectStorePopulator(object):
