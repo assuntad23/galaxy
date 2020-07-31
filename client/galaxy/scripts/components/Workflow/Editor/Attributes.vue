@@ -15,6 +15,12 @@
                 </b-form-select-option>
             </b-form-select>
         </div>
+        <div class="license-selector-area">
+            <b>License</b>
+            <license-selector
+                ref="LicenseSelector"
+            />
+        </div>    
         <div v-if="hasParameters" id="workflow-parameters-area" class="mt-2">
             <b>Parameters</b>
             <b-list-group>
@@ -45,6 +51,7 @@ import Vue from "vue";
 import BootstrapVue from "bootstrap-vue";
 import { Services } from "components/Workflow/services";
 import Tags from "components/Common/Tags";
+import LicenseSelector from "components/Licenses/LicenseSelector";
 
 Vue.use(BootstrapVue);
 
@@ -52,6 +59,7 @@ export default {
     name: "Attributes",
     components: {
         Tags,
+        LicenseSelector,
     },
     props: {
         id: {
