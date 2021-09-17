@@ -152,6 +152,8 @@
                             >
                                 {{ l("Start over") }}
                             </a>
+                            <font-awesome-icon v-if="!sortedAtoZ" icon="faSortAlphaDown" @click="sortListAtoZ" />
+                            <font-awesome-icon v-else-if="sortedAtoZ" icon="faSortAlphaDownAlt" @click="sortListZtoA"/>
                             <a
                                 class="clear-selected"
                                 v-if="atLeastOneDatasetIsSelected"
@@ -205,7 +207,11 @@ import "ui/hoverhighlight";
 import Vue from "vue";
 import BootstrapVue from "bootstrap-vue";
 import draggable from "vuedraggable";
+import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
+import { library } from "@fortawesome/fontawesome-svg-core";
+import { faSortAlphaDown, faSortAlphaDownAlt } from "@fortawesome/free-solid-svg-icons";
 
+library.add(faSortAlphaDown, faSortAlphaDownAlt);
 Vue.use(BootstrapVue);
 export default {
     mixins: [mixin],
@@ -214,7 +220,7 @@ export default {
         this._elementsSetUp();
         this.saveOriginalNames();
     },
-    components: { DatasetCollectionElementView, draggable },
+    components: { DatasetCollectionElementView, draggable, FontAwesomeIcon },
     data: function () {
         return {
             state: "build", //error
@@ -234,6 +240,7 @@ export default {
             selectedDatasetElems: [],
             removeExtensions: true,
             duplicateNames: [],
+            sorted: false
         };
     },
     computed: {
@@ -267,6 +274,22 @@ export default {
         showDuplicateError() {
             return this.duplicateNames.length > 0;
         },
+        sortedAtoZ(){
+            if (sorted = false){
+                return false
+            }
+            else{
+
+            }
+        },
+        sortedZtoA(){
+            if (sorted = false){
+                return false
+            }
+            else {
+
+            }
+        }
     },
     methods: {
         l(str) {
