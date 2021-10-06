@@ -4,7 +4,7 @@
         :params="params"
         :disable-poll="false"
         :debug="false"
-        :debounce-period="500"
+        :debounce-period="1000"
         v-slot="{ loading, payload, manualReload, setScrollPos }"
     >
         <ExpandedItems
