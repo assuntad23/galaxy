@@ -63,15 +63,14 @@
                     <template v-slot:listing>
                         <HistoryEmpty v-if="history.empty" class="m-2" />
                         <HistoryEmpty v-else-if="payload && payload.noResults" message="No Results." class="m-2" />
-                        <Scroller
+                        <div
                             v-else-if="payload"
+                            v-infinite-scroll="getMoreContent(setScrollPos, payload)"
+                            infinite-scroll-disabled="busy"
+                            infinite-scroll-distance="10"
                             :class="{ loadingBackground: loading }"
-                            key-field="hid"
-                            v-bind="payload"
-                            :debug="false"
-                            @scroll="setScrollPos"
                         >
-                            <template v-slot="{ item, index, rowKey }">
+                            <div v-for="(item, index, rowKey) in historyItems" :key="rowKey">
                                 <HistoryContentItem
                                     :item="item"
                                     :index="index"
@@ -86,8 +85,8 @@
                                     :data-index="index"
                                     :data-row-key="rowKey"
                                 />
-                            </template>
-                        </Scroller>
+                            </div>
+                        </div>
                     </template>
 
                     <template v-slot:modals>
@@ -108,15 +107,17 @@ import HistoryDetails from "./HistoryDetails";
 import HistoryEmpty from "./HistoryEmpty";
 import ContentOperations from "./ContentOperations";
 import ToolHelpModal from "./ToolHelpModal";
-import Scroller from "./Scroller";
+// import Scroller from "./Scroller";
 import { HistoryContentItem } from "./ContentItem";
 import { reportPayload } from "./providers/ContentProvider/helpers";
 import HistoryMenu from "./HistoryMenu";
+import infiniteScroll from "vue-infinite-scroll";
 
 export default {
     filters: {
         reportPayload,
     },
+    directives: { infiniteScroll },
     components: {
         HistoryContentProvider,
         Layout,
@@ -125,7 +126,7 @@ export default {
         HistoryEmpty,
         ContentOperations,
         ToolHelpModal,
-        Scroller,
+        // InfiniteScroll,
         HistoryContentItem,
         ExpandedItems,
         SelectedItems,
@@ -138,11 +139,25 @@ export default {
         return {
             params: new SearchParams(),
             useItemSelection: false,
+            busy: false,
+            historyItems: []
         };
     },
     computed: {
         historyId() {
             return this.history.id;
+        },
+    },
+    methods: {
+        getMoreContent(setScrollPos, payload) {
+            this.busy = true;
+            console.log("HERE: ", payload.contents.length, payload.totalMatches);
+            setTimeout(() => {
+                const data = { cursor: payload.contents.length / payload.totalMatches };
+                //TODO: we might need to swap out setScrollPos & in content provider with something more simple.
+                setScrollPos(data);
+                this.busy = false;
+            }, 1000);
         },
     },
 };
