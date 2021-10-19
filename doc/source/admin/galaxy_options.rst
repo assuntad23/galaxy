@@ -287,6 +287,18 @@
 :Type: str
 
 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``maximum_upload_file_size``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Description:
+    Maximum size of uploadable files, specified in bytes (default:
+    100GB). This value is ignored if an external upload server is
+    configured.
+:Default: ``107374182400``
+:Type: int
+
+
 ~~~~~~~~~~~~~~~~~~~~
 ``tool_config_file``
 ~~~~~~~~~~~~~~~~~~~~
@@ -2327,8 +2339,8 @@
 :Description:
     Galaxy can upload user files in chunks without using nginx. Enable
     the chunk uploader by specifying a chunk size larger than 0. The
-    chunk size is specified in bytes (default: 100MB).
-:Default: ``104857600``
+    chunk size is specified in bytes (default: 10MB).
+:Default: ``10485760``
 :Type: int
 
 
@@ -2788,18 +2800,16 @@
 :Type: str
 
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-``sentry_sloreq_threshold``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+``sentry_event_level``
+~~~~~~~~~~~~~~~~~~~~~~
 
 :Description:
-    Sentry slow request logging.  Requests slower than the threshold
-    indicated below will be sent as events to the configured Sentry
-    server (above, sentry_dsn).  A value of '0' is disabled.  For
-    example, you would set this to .005 to log all queries taking
-    longer than 5 milliseconds.
-:Default: ``0.0``
-:Type: float
+    Determines the minimum log level that will be sent as an event to
+    Sentry. Possible values are DEBUG, INFO, WARNING, ERROR or
+    CRITICAL.
+:Default: ``ERROR``
+:Type: str
 
 
 ~~~~~~~~~~~~~~~

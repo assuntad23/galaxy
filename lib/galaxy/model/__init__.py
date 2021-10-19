@@ -4,6 +4,7 @@ Galaxy data model classes
 Naming: try to use class names that have a distinct plural form so that
 the relationship cardinalities are obvious (e.g. prefer Dataset to Data)
 """
+import abc
 import base64
 import errno
 import json
@@ -20,10 +21,13 @@ from datetime import datetime, timedelta
 from enum import Enum
 from string import Template
 from typing import (
+    Any,
+    Dict,
     Iterable,
     List,
     NamedTuple,
     Optional,
+    Type,
     TYPE_CHECKING,
     Union,
 )
@@ -100,6 +104,7 @@ from galaxy.model.item_attrs import get_item_annotation_str, UsesAnnotations
 from galaxy.model.orm.now import now
 from galaxy.model.view import HistoryDatasetCollectionJobStateSummary
 from galaxy.security import get_permitted_actions
+from galaxy.security.idencoding import IdEncodingHelper
 from galaxy.security.validate_user_input import validate_password_str
 from galaxy.util import (
     directory_hash_id,
@@ -140,6 +145,7 @@ AUTO_PROPAGATED_TAGS = ["name"]
 if TYPE_CHECKING:
     class _HasTable:
         table: Table
+        __table__: Table
 else:
     _HasTable = object
 
@@ -278,6 +284,23 @@ class SerializationOptions:
     def serialize_files(self, dataset, as_dict):
         if self.serialize_files_handler is not None:
             self.serialize_files_handler.serialize_files(dataset, as_dict)
+
+
+class Serializable(RepresentById):
+
+    def serialize(self, id_encoder: IdEncodingHelper, serialization_options: SerializationOptions, for_link: bool = False) -> Dict[str, Any]:
+        """Serialize model for a re-population in (potentially) another Galaxy instance."""
+        if for_link:
+            rval = dict_for(
+                self
+            )
+            serialization_options.attach_identifier(id_encoder, self, rval)
+            return rval
+        return self._serialize(id_encoder, serialization_options)
+
+    @abc.abstractmethod
+    def _serialize(self, id_encoder: IdEncodingHelper, serialization_options: SerializationOptions) -> Dict[str, Any]:
+        """Serialize model for a re-population in (potentially) another Galaxy instance."""
 
 
 class HasName:
@@ -854,7 +877,7 @@ class TaskMetricNumeric(BaseJobMetric, RepresentById):
     metric_value = Column(Numeric(JOB_METRIC_PRECISION, JOB_METRIC_SCALE))
 
 
-class Job(Base, JobLike, UsesCreateAndUpdateTime, Dictifiable, RepresentById):
+class Job(Base, JobLike, UsesCreateAndUpdateTime, Dictifiable, Serializable):
     """
     A job represents a request to run a tool given input datasets, tool
     parameters, and output datasets.
@@ -1306,7 +1329,7 @@ class Job(Base, JobLike, UsesCreateAndUpdateTime, Dictifiable, RepresentById):
             if flush:
                 object_session(self).flush()
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         job_attrs = dict_for(self)
         serialization_options.attach_identifier(id_encoder, self, job_attrs)
         job_attrs['tool_id'] = self.tool_id
@@ -1543,6 +1566,12 @@ class Job(Base, JobLike, UsesCreateAndUpdateTime, Dictifiable, RepresentById):
                 log.exception(f"Error trying to determine if job {self.id} is remappable")
         return False
 
+    def hide_outputs(self, flush=True):
+        for output_association in self.output_datasets + self.output_dataset_collection_instances:
+            output_association.item.visible = False
+        if flush:
+            object_session(self).flush()
+
 
 class Task(Base, JobLike, RepresentById):
     """
@@ -1766,6 +1795,10 @@ class JobToOutputDatasetAssociation(Base, RepresentById):
         self.name = name
         self.dataset = dataset
 
+    @property
+    def item(self):
+        return self.dataset
+
 
 class JobToInputDatasetCollectionAssociation(Base, RepresentById):
     __tablename__ = 'job_to_input_dataset_collection'
@@ -1815,6 +1848,10 @@ class JobToOutputDatasetCollectionAssociation(Base, RepresentById):
     def __init__(self, name, dataset_collection_instance):
         self.name = name
         self.dataset_collection_instance = dataset_collection_instance
+
+    @property
+    def item(self):
+        return self.dataset_collection_instance
 
 
 # A DatasetCollection will be mapped to at most one job per tool output
@@ -1903,7 +1940,7 @@ class ImplicitlyCreatedDatasetCollectionInput(Base, RepresentById):
         self.input_dataset_collection = input_dataset_collection
 
 
-class ImplicitCollectionJobs(Base, RepresentById):
+class ImplicitCollectionJobs(Base, Serializable):
     __tablename__ = 'implicit_collection_jobs'
 
     id = Column(Integer, primary_key=True)
@@ -1923,7 +1960,7 @@ class ImplicitCollectionJobs(Base, RepresentById):
     def job_list(self):
         return [icjja.job for icjja in self.jobs]
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             populated_state=self.populated_state,
@@ -2274,7 +2311,7 @@ class HistoryAudit(Base, RepresentById):
         sa_session.execute(q)
 
 
-class History(Base, HasTags, Dictifiable, UsesAnnotations, HasName, RepresentById):
+class History(Base, HasTags, Dictifiable, UsesAnnotations, HasName, Serializable):
     __tablename__ = 'history'
     __table_args__ = (
         Index('ix_history_slug', 'slug', mysql_length=200),
@@ -2554,7 +2591,7 @@ class History(Base, HasTags, Dictifiable, UsesAnnotations, HasName, RepresentByI
         # This needs to be a list
         return [hda for hda in self.datasets if not hda.dataset.deleted]
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
 
         history_attrs = dict_for(
             self,
@@ -3080,7 +3117,7 @@ class StorableObject:
             sa_session.flush()
 
 
-class Dataset(StorableObject, RepresentById, _HasTable):
+class Dataset(StorableObject, Serializable, _HasTable):
 
     class states(str, Enum):
         NEW = 'new'
@@ -3326,7 +3363,7 @@ class Dataset(StorableObject, RepresentById, _HasTable):
                 return True
         return False
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         # serialize Dataset objects only for jobs that can actually modify these models.
         assert serialization_options.serialize_dataset_objects
 
@@ -3351,7 +3388,7 @@ class Dataset(StorableObject, RepresentById, _HasTable):
         return rval
 
 
-class DatasetSource(Base, RepresentById):
+class DatasetSource(Base, Serializable):
     __tablename__ = 'dataset_source'
 
     id = Column(Integer, primary_key=True)
@@ -3362,7 +3399,7 @@ class DatasetSource(Base, RepresentById):
     dataset = relationship('Dataset', back_populates='sources')
     hashes = relationship('DatasetSourceHash', back_populates='source')
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             source_uri=self.source_uri,
@@ -3374,7 +3411,7 @@ class DatasetSource(Base, RepresentById):
         return rval
 
 
-class DatasetSourceHash(Base, RepresentById):
+class DatasetSourceHash(Base, Serializable):
     __tablename__ = 'dataset_source_hash'
 
     id = Column(Integer, primary_key=True)
@@ -3383,7 +3420,7 @@ class DatasetSourceHash(Base, RepresentById):
     hash_value = Column(TEXT)
     source = relationship('DatasetSource', back_populates='hashes')
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             hash_function=self.hash_function,
@@ -3393,7 +3430,7 @@ class DatasetSourceHash(Base, RepresentById):
         return rval
 
 
-class DatasetHash(Base, RepresentById):
+class DatasetHash(Base, Serializable):
     __tablename__ = 'dataset_hash'
 
     id = Column(Integer, primary_key=True)
@@ -3403,7 +3440,7 @@ class DatasetHash(Base, RepresentById):
     extra_files_path = Column(TEXT)
     dataset = relationship('Dataset', back_populates='hashes')
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             hash_function=self.hash_function,
@@ -3922,14 +3959,7 @@ class DatasetInstance:
 
         return msg
 
-    def serialize(self, id_encoder, serialization_options, for_link=False):
-        if for_link:
-            rval = dict_for(
-                self
-            )
-            serialization_options.attach_identifier(id_encoder, self, rval)
-            return rval
-
+    def _serialize(self, id_encoder, serialization_options):
         metadata = _prepare_metadata_for_serialization(id_encoder, serialization_options, self.metadata)
         rval = dict_for(
             self,
@@ -3970,7 +4000,7 @@ class DatasetInstance:
 
 
 class HistoryDatasetAssociation(DatasetInstance, HasTags, Dictifiable, UsesAnnotations,
-                                HasName, RepresentById):
+                                HasName, Serializable):
     """
     Resource class that creates a relation between a dataset and a user history.
     """
@@ -4193,15 +4223,8 @@ class HistoryDatasetAssociation(DatasetInstance, HasTags, Dictifiable, UsesAnnot
                 rval += self.get_total_size()
         return rval
 
-    def serialize(self, id_encoder, serialization_options, for_link=False):
-        if for_link:
-            rval = dict_for(
-                self
-            )
-            serialization_options.attach_identifier(id_encoder, self, rval)
-            return rval
-
-        rval = super().serialize(id_encoder, serialization_options)
+    def _serialize(self, id_encoder, serialization_options):
+        rval = super()._serialize(id_encoder, serialization_options)
         rval['state'] = self.state
         rval["hid"] = self.hid
         rval["annotation"] = unicodify(getattr(self, 'annotation', ''))
@@ -4307,7 +4330,7 @@ class HistoryDatasetAssociation(DatasetInstance, HasTags, Dictifiable, UsesAnnot
                  + type_coerce(cls.id, Unicode)).label('type_id'))
 
 
-class HistoryDatasetAssociationHistory(Base, RepresentById):
+class HistoryDatasetAssociationHistory(Base, Serializable):
     __tablename__ = 'history_dataset_association_history'
 
     id = Column(Integer, primary_key=True)
@@ -4383,7 +4406,7 @@ class HistoryDatasetAssociationSubset(Base, RepresentById):
         self.location = location
 
 
-class Library(Base, Dictifiable, HasName, RepresentById):
+class Library(Base, Dictifiable, HasName, Serializable):
     __tablename__ = 'library'
 
     id = Column(Integer, primary_key=True)
@@ -4408,7 +4431,7 @@ class Library(Base, Dictifiable, HasName, RepresentById):
         self.synopsis = synopsis
         self.root_folder = root_folder
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             name=self.name,
@@ -4461,7 +4484,7 @@ class Library(Base, Dictifiable, HasName, RepresentById):
         return roles
 
 
-class LibraryFolder(Base, Dictifiable, HasName, RepresentById):
+class LibraryFolder(Base, Dictifiable, HasName, Serializable):
     __tablename__ = 'library_folder'
     __table_args__ = (
         Index('ix_library_folder_name', 'name', mysql_length=200),
@@ -4538,7 +4561,7 @@ class LibraryFolder(Base, Dictifiable, HasName, RepresentById):
         # This needs to be a list
         return [ld for ld in self.datasets if ld.library_dataset_dataset_association and not ld.library_dataset_dataset_association.dataset.deleted]
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             name=self.name,
@@ -4583,7 +4606,7 @@ class LibraryFolder(Base, Dictifiable, HasName, RepresentById):
         return f.library_root[0]
 
 
-class LibraryDataset(Base, RepresentById):
+class LibraryDataset(Base, Serializable):
     __tablename__ = 'library_dataset'
 
     id = Column(Integer, primary_key=True)
@@ -4650,7 +4673,7 @@ class LibraryDataset(Base, RepresentById):
     def display_name(self):
         self.library_dataset_dataset_association.display_name()
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             name=self.name,
@@ -4700,7 +4723,7 @@ class LibraryDataset(Base, RepresentById):
         return rval
 
 
-class LibraryDatasetDatasetAssociation(DatasetInstance, HasName, RepresentById):
+class LibraryDatasetDatasetAssociation(DatasetInstance, HasName, Serializable):
 
     def __init__(self,
                  copied_from_history_dataset_association=None,
@@ -4791,15 +4814,8 @@ class LibraryDatasetDatasetAssociation(DatasetInstance, HasName, RepresentById):
     def has_manage_permissions_roles(self, security_agent):
         return self.dataset.has_manage_permissions_roles(security_agent)
 
-    def serialize(self, id_encoder, serialization_options, for_link=False):
-        if for_link:
-            rval = dict_for(
-                self
-            )
-            serialization_options.attach_identifier(id_encoder, self, rval)
-            return rval
-
-        rval = super().serialize(id_encoder, serialization_options)
+    def _serialize(self, id_encoder, serialization_options):
+        rval = super()._serialize(id_encoder, serialization_options)
         self._handle_serialize_files(id_encoder, serialization_options, rval)
         return rval
 
@@ -5068,7 +5084,7 @@ class InnerCollectionFilter(NamedTuple):
         return self.operator_function(getattr(table, self.column), self.expected_value)
 
 
-class DatasetCollection(Base, Dictifiable, UsesAnnotations, RepresentById):
+class DatasetCollection(Base, Dictifiable, UsesAnnotations, Serializable):
     __tablename__ = 'dataset_collection'
 
     id = Column(Integer, primary_key=True)
@@ -5112,7 +5128,7 @@ class DatasetCollection(Base, Dictifiable, UsesAnnotations, RepresentById):
         hda_attributes: Optional[Iterable[str]] = None,
         dataset_attributes: Optional[Iterable[str]] = None,
         dataset_permission_attributes: Optional[Iterable[str]] = None,
-        return_entities: Optional[Iterable[Union[HistoryDatasetAssociation, Dataset, DatasetPermissions, 'DatasetCollectionElement']]] = None,
+        return_entities: Optional[Iterable[Union[Type[HistoryDatasetAssociation], Type[Dataset], Type[DatasetPermissions], Type['DatasetCollection'], Type['DatasetCollectionElement']]]] = None,
         inner_filter: Optional[InnerCollectionFilter] = None
     ):
         collection_attributes = collection_attributes or ()
@@ -5365,12 +5381,11 @@ class DatasetCollection(Base, Dictifiable, UsesAnnotations, RepresentById):
         return new_collection
 
     def replace_failed_elements(self, replacements):
-        for element in self.elements:
-            if element.element_object in replacements:
-                if element.element_type == 'hda':
-                    element.hda = replacements[element.element_object]
-                    element.hda.visible = False
-                # TODO: handle the case where elements are collections
+        hda_id_to_element = dict(self._get_nested_collection_attributes(return_entities=[DatasetCollectionElement], hda_attributes=['id']))
+        for failed, replacement in replacements.items():
+            element = hda_id_to_element.get(failed.id)
+            if element:
+                element.hda = replacement
 
     def set_from_dict(self, new_data):
         # Nothing currently editable in this class.
@@ -5380,7 +5395,7 @@ class DatasetCollection(Base, Dictifiable, UsesAnnotations, RepresentById):
     def has_subcollections(self):
         return ":" in self.collection_type
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             type=self.collection_type,
@@ -5449,7 +5464,7 @@ class HistoryDatasetCollectionAssociation(
     HasTags,
     Dictifiable,
     UsesAnnotations,
-    RepresentById
+    Serializable,
 ):
     """ Associates a DatasetCollection with a History. """
     __tablename__ = 'history_dataset_collection_association'
@@ -5584,14 +5599,7 @@ class HistoryDatasetCollectionAssociation(
         if len(rval) > 0:
             return rval if multiple else rval[0]
 
-    def serialize(self, id_encoder, serialization_options, for_link=False):
-        if for_link:
-            rval = dict_for(
-                self
-            )
-            serialization_options.attach_identifier(id_encoder, self, rval)
-            return rval
-
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             display_name=self.display_name(),
@@ -5770,7 +5778,7 @@ class LibraryDatasetCollectionAssociation(Base, DatasetCollectionInstance, Repre
         return dict_value
 
 
-class DatasetCollectionElement(Base, Dictifiable, RepresentById):
+class DatasetCollectionElement(Base, Dictifiable, Serializable):
     """ Associates a DatasetInstance (hda or ldda) with a DatasetCollection. """
     __tablename__ = 'dataset_collection_element'
 
@@ -5914,7 +5922,7 @@ class DatasetCollectionElement(Base, Dictifiable, RepresentById):
         )
         return new_element
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
             element_type=self.element_type,
@@ -7379,7 +7387,7 @@ class WorkflowInvocationStepOutputDatasetCollectionAssociation(Base, Dictifiable
     dict_collection_visible_keys = ['id', 'workflow_invocation_step_id', 'dataset_collection_id', 'output_name']
 
 
-class MetadataFile(Base, StorableObject, RepresentById):
+class MetadataFile(Base, StorableObject, Serializable):
     __tablename__ = 'metadata_file'
 
     id = Column(Integer, primary_key=True)
@@ -7437,7 +7445,7 @@ class MetadataFile(Base, StorableObject, RepresentById):
             # Return filename inside hashed directory
             return os.path.abspath(os.path.join(path, "metadata_%d.dat" % self.id))
 
-    def serialize(self, id_encoder, serialization_options):
+    def _serialize(self, id_encoder, serialization_options):
         as_dict = dict_for(self)
         serialization_options.attach_identifier(id_encoder, self, as_dict)
         as_dict["uuid"] = str(self.uuid or '') or None
