@@ -216,14 +216,16 @@ def __extract_payload_from_request(trans, func, kwargs):
                 except Exception:
                     # may not actually be json, just continue
                     pass
+    elif content_type == 'application/offset+octet-stream':
+        return unicodify(trans.request.body)
     else:
         # Assume application/json content type and parse request body manually, since wsgi won't do it. However, the order of this check
         # should ideally be in reverse, with the if clause being a check for application/json and the else clause assuming a standard encoding
         # such as multipart/form-data. Leaving it as is for backward compatibility, just in case.
         payload = loads(unicodify(trans.request.body))
-        run_as = trans.request.headers.get('run-as')
-        if run_as:
-            payload['run_as'] = run_as
+    run_as = trans.request.headers.get('run-as')
+    if run_as:
+        payload['run_as'] = run_as
     return payload
 
 

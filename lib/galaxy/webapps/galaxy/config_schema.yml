@@ -225,6 +225,14 @@ mapping:
           Where temporary files are stored. It must be accessible at the same path on any cluster
           nodes that will run Galaxy jobs, unless using Pulsar.
 
+      maximum_upload_file_size:
+        type: int
+        default: 107374182400
+        required: false
+        desc: |
+          Maximum size of uploadable files, specified in bytes (default: 100GB).
+          This value is ignored if an external upload server is configured.
+
       tool_config_file:
         type: any
         default: tool_conf.xml
@@ -1697,12 +1705,12 @@ mapping:
 
       chunk_upload_size:
         type: int
-        default: 104857600
+        default: 10485760
         required: false
         desc: |
           Galaxy can upload user files in chunks without using nginx. Enable the chunk
           uploader by specifying a chunk size larger than 0. The chunk size is specified
-          in bytes (default: 100MB).
+          in bytes (default: 10MB).
 
       dynamic_proxy_manage:
         type: bool
@@ -2029,16 +2037,13 @@ mapping:
           indicated sentry instance.  This connection string is available in your
           sentry instance under <project_name> -> Settings -> API Keys.
 
-      sentry_sloreq_threshold:
-        type: float
-        default: 0.0
+      sentry_event_level:
+        type: str
+        default: ERROR
         required: false
         desc: |
-          Sentry slow request logging.  Requests slower than the threshold
-          indicated below will be sent as events to the configured Sentry
-          server (above, sentry_dsn).  A value of '0' is disabled.  For
-          example, you would set this to .005 to log all queries taking longer
-          than 5 milliseconds.
+          Determines the minimum log level that will be sent as an event to Sentry.
+          Possible values are DEBUG, INFO, WARNING, ERROR or CRITICAL.
 
       statsd_host:
         type: str
@@ -2582,42 +2587,6 @@ mapping:
         desc: |
           Default format for the export of workflows. Possible values are 'ga'
           or 'format2'.
-
-      force_beta_workflow_scheduled_min_steps:
-        type: int
-        default: 250
-        required: false
-        desc: |
-          Following options only apply to workflows scheduled using the legacy workflow
-          run API (running workflows via a POST to /api/workflows).
-          Force usage of Galaxy's beta workflow scheduler under certain circumstances -
-          this workflow scheduling forces Galaxy to schedule workflows in the background
-          so initial submission of the workflows is significantly sped up. This does
-          however force the user to refresh their history manually to see newly scheduled
-          steps (for "normal" workflows - steps are still scheduled far in advance of
-          them being queued and scheduling here doesn't refer to actual cluster job
-          scheduling).
-          Workflows containing more than the specified number of steps will always use
-          the Galaxy's beta workflow scheduling.
-
-      force_beta_workflow_scheduled_for_collections:
-        type: bool
-        default: false
-        required: false
-        desc: |
-          Following options only apply to workflows scheduled using the legacy workflow
-          run API (running workflows via a POST to /api/workflows).
-          Force usage of Galaxy's beta workflow scheduler under certain circumstances -
-          this workflow scheduling forces Galaxy to schedule workflows in the background
-          so initial submission of the workflows is significantly sped up. This does
-          however force the user to refresh their history manually to see newly scheduled
-          steps (for "normal" workflows - steps are still scheduled far in advance of
-          them being queued and scheduling here doesn't refer to actual cluster job
-          scheduling).
-          Workflows containing more than the specified number of steps will always use
-          the Galaxy's beta workflow scheduling.
-          Switch to using Galaxy's beta workflow scheduling for all workflows involving
-          collections.
 
       parallelize_workflow_scheduling_within_histories:
         type: bool

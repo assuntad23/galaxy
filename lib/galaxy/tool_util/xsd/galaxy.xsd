@@ -55,6 +55,10 @@ List of behavior changes associated with profile versions:
 - Exit immediately if a command exits with a non-zero status (`set -e`).
 - Assume sort order for collection elements.
 
+### 21.09
+
+- Do not strip leading and trailing whitespaces in `from_work_dir` attribute.
+
 ### Examples
 
 A normal tool:
@@ -2521,13 +2525,11 @@ In output filters sections are represented as dictionary with the same name as t
 <filter>section_name['parameter_name']</filter>
 ```
 
-In order to reference parameters in sections from tags in the `<outputs>` section, e.g. in the `format_source` attribute of `<data>` tags, the syntax is:
+In order to reference parameters in sections from tags in the `<outputs>` section, e.g. in the `format_source` attribute of `<data>` tags, the syntax is currently:
 
 ```
-<data name="output" format_source="section_name|parameter_name" metadata_source="section_name|parameter_name"/>
+<data name="output" format_source="parameter_name" metadata_source="parameter_name"/>
 ```
-
-Until profile 21.01 `parameter_name` was sufficient (https://github.com/galaxyproject/galaxy/pull/9493/files).
 
 Note that references to other parameters in the `<inputs>` section are only possible if the reference is in the same section or its parents (and is defined earlier), therefore only `parameter_name` is used.
 
