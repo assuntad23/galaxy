@@ -115,6 +115,7 @@ export default {
 
         // The slice of contents to render right now, this is the actual data we loop over in the template
         itemWindow() {
+            console.log("ITEM WINDOW: start=", this.itemStartIndex, " end=", this.itemStartIndex + this.pageSize);
             return this.contents.slice(this.itemStartIndex, this.itemStartIndex + this.pageSize);
         },
 
@@ -126,6 +127,7 @@ export default {
 
         // The portion of the way down the total list as descrbed by the input props
         cursor() {
+            console.log("CURSOR: ", this.totalMatches > 0 ? this.dataStartIndex / this.totalMatches : 0);
             return this.totalMatches > 0 ? this.dataStartIndex / this.totalMatches : 0;
         },
 
@@ -213,6 +215,7 @@ export default {
             if (this.showScroller) {
                 const n = deltaY == 0 ? 0 : Math.abs(deltaY) / deltaY;
                 this.manualStartIndex = clamp(this.itemStartIndex + n, 0, this.totalMatches - 1);
+                console.log("MANUAL START KEY: ", this.manualStartIndex);
             }
         },
 
