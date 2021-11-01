@@ -78,6 +78,12 @@ export default {
 
         // debug flag
         debug: { type: Boolean, default: false },
+
+        // How many records are currently expanded, used to calculate how far we can scroll down
+        expandedCount: { type: Number, required: true },
+
+        // List of expanded items, used to determine if they're in current window
+        expandedList: { type: Set, required: true },
     },
 
     data() {
@@ -107,14 +113,44 @@ export default {
             };
         },
 
+        expandedInWindow() {
+            if (this.expandedCount != 0) {
+                console.log("EXPANDED LIST IS:" + this.expandedList);
+                const expandedArray = Array.from(this.expandedList);
+                console.log("EXPANDEDARRAY " + expandedArray);
+                let expandedCountIW = 0;
+                expandedArray.forEach((item) => {
+                    console.log("EXPANDED ITEM", item);
+
+                    inWindowItems = this.itemWindow();
+
+                    inWindowItems.forEach((itemIW) => {
+                        if (item.contains(itemIW.id)) {
+                            expandedCountIW++;
+                        }
+                    });
+                });
+            }
+        },
+
         // The index to start rendering content at, can be manually adjusted with
         // the mouse wheel, and must be updated when new contents come in
         itemStartIndex() {
-            return this.manualStartIndex ?? this.startKeyIndex;
+            const index = this.manualStartIndex ?? this.startKeyIndex;
+            const shift = (this.getExpandedRowHeight() / this.getFirstRowHeight()) * this.expandedCount;
+            const end = this.contents.length - this.pageSize + 5 + Math.floor(shift);
+            console.log("THE BEGINNING IS ... ", index);
+            console.log("THE END IS ...", end);
+            return clamp(index, 0, end);
+            // return index;
         },
 
         // The slice of contents to render right now, this is the actual data we loop over in the template
         itemWindow() {
+            // const top = clamp(this.itemStartIndex, 0, this.contents.length - this.pageSize);
+            // const bottom = clamp(this.itemStartIndex + this.pageSize, 0, this.contents.length + 1);
+            // return this.contents.slice(top, bottom);
+            console.log("ARR: ", this.contents.slice(this.itemStartIndex, this.itemStartIndex + this.pageSize));
             return this.contents.slice(this.itemStartIndex, this.itemStartIndex + this.pageSize);
         },
 
@@ -277,8 +313,13 @@ export default {
         },
 
         getFirstRowHeight() {
-            const rowHeight = this.$refs?.listing.querySelector("ul > li")?.offsetHeight || 10;
+            const rowHeight = this.$refs?.listing?.querySelector("ul > li")?.offsetHeight || 10;
             return parseInt(rowHeight);
+        },
+
+        getExpandedRowHeight() {
+            const expRowHeight = this.$refs?.listing?.querySelector("ul > li > div.expanded")?.offsetHeight || 10;
+            return parseInt(expRowHeight);
         },
 
         setScrollTop(newScrollTop) {

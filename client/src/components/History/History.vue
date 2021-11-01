@@ -10,7 +10,7 @@
         <ExpandedItems
             :scope-key="history.id"
             :get-item-key="(item) => item.type_id"
-            v-slot="{ expandedCount, isExpanded, setExpanded, collapseAll }"
+            v-slot="{ expandedCount, isExpanded, setExpanded, collapseAll, expandedList }"
         >
             <SelectedItems
                 :scope-key="history.id"
@@ -70,6 +70,8 @@
                             v-bind="payload"
                             :debug="false"
                             @scroll="setScrollPos"
+                            :expandedCount="expandedCount"
+                            :expandedList="expandedList"
                         >
                             <template v-slot="{ item, index, rowKey }">
                                 <HistoryContentItem

@@ -53,6 +53,7 @@ export default {
             setExpanded: this.setExpanded,
             collapseAll: this.reset,
             expandedCount: this.expandedCount,
+            expandedList: this.items
         });
     },
 };
