@@ -2420,10 +2420,9 @@ class History(Base, HasTags, Dictifiable, UsesAnnotations, HasName, Serializable
     def stage_addition(self, items):
         history_id = self.id
         for item in listify(items):
+            item.history = self
             if history_id:
                 item.history_id = history_id
-            else:
-                item.history = self
             self._pending_additions.append(item)
 
     @property
@@ -2489,7 +2488,7 @@ class History(Base, HasTags, Dictifiable, UsesAnnotations, HasName, Serializable
         if optimize:
             self.__add_datasets_optimized(datasets, genome_build=genome_build)
             if quota and self.user:
-                disk_usage = sum([d.get_total_size() for d in datasets if is_hda(d)])
+                disk_usage = sum(d.get_total_size() for d in datasets if is_hda(d))
                 self.user.adjust_total_disk_usage(disk_usage)
             sa_session.add_all(datasets)
             if flush:
@@ -2568,10 +2567,9 @@ class History(Base, HasTags, Dictifiable, UsesAnnotations, HasName, Serializable
         else:
             hdcas = self.active_dataset_collections
         for hdca in hdcas:
-            new_hdca = hdca.copy()
+            new_hdca = hdca.copy(flush=False)
             new_history.add_dataset_collection(new_hdca, set_hid=False)
             db_session.add(new_hdca)
-            db_session.flush()
 
             if target_user:
                 new_hdca.copy_item_annotation(db_session, self.user, hdca, target_user, new_hdca)
@@ -3307,7 +3305,7 @@ class Dataset(StorableObject, Serializable, _HasTable):
         if rel_path is not None:
             if self.object_store.exists(self, extra_dir=rel_path, dir_only=True):
                 for root, _, files in os.walk(self.extra_files_path):
-                    self.total_size += sum([os.path.getsize(os.path.join(root, file)) for file in files if os.path.exists(os.path.join(root, file))])
+                    self.total_size += sum(os.path.getsize(os.path.join(root, file)) for file in files if os.path.exists(os.path.join(root, file)))
         return self.total_size
 
     def has_data(self):
@@ -3465,7 +3463,7 @@ def datatype_for_extension(extension, datatypes_registry=None):
     return ret
 
 
-class DatasetInstance:
+class DatasetInstance(_HasTable):
     """A base class for all 'dataset instances', HDAs, LDAs, etc"""
     states = Dataset.states
     conversion_messages = Dataset.conversion_messages
@@ -3975,6 +3973,8 @@ class DatasetInstance:
             deleted=self.deleted,
             visible=self.visible,
             dataset_uuid=(lambda uuid: str(uuid) if uuid else None)(self.dataset.uuid),
+            validated_state=self.validated_state,
+            validated_state_message=self.validated_state_message,
         )
 
         serialization_options.attach_identifier(id_encoder, self, rval)
@@ -4520,14 +4520,14 @@ class LibraryFolder(Base, Dictifiable, HasName, Serializable):
         viewonly=True)
 
     datasets = relationship('LibraryDataset',
-        primaryjoin=(lambda: LibraryDataset.folder_id == LibraryFolder.id),  # type: ignore
+        primaryjoin=(lambda: LibraryDataset.folder_id == LibraryFolder.id and LibraryDataset.library_dataset_dataset_association_id.isnot(None)),  # type: ignore
         order_by=(lambda: asc(LibraryDataset._name)),  # type: ignore
         lazy=True,
         viewonly=True)
 
     active_datasets = relationship('LibraryDataset',
         primaryjoin=(
-            'and_(LibraryDataset.folder_id == LibraryFolder.id, not_(LibraryDataset.deleted))'),
+            'and_(LibraryDataset.folder_id == LibraryFolder.id, not_(LibraryDataset.deleted), LibraryDataset.library_dataset_dataset_association_id.isnot(None))'),
         order_by=(lambda: asc(LibraryDataset._name)),  # type: ignore
         lazy=True,
         viewonly=True)
@@ -4564,6 +4564,7 @@ class LibraryFolder(Base, Dictifiable, HasName, Serializable):
     def _serialize(self, id_encoder, serialization_options):
         rval = dict_for(
             self,
+            id=self.id,  # FIXME: serialize only in sessionless export mode
             name=self.name,
             description=self.description,
             genome_build=self.genome_build,
@@ -4698,7 +4699,7 @@ class LibraryDataset(Base, Serializable):
                     name=ldda.name,
                     file_name=ldda.file_name,
                     created_from_basename=ldda.created_from_basename,
-                    uploaded_by=ldda.user.email,
+                    uploaded_by=ldda.user and ldda.user.email,
                     message=ldda.message,
                     date_uploaded=ldda.create_time.isoformat(),
                     update_time=ldda.update_time.isoformat(),
@@ -5400,6 +5401,7 @@ class DatasetCollection(Base, Dictifiable, UsesAnnotations, Serializable):
             self,
             type=self.collection_type,
             populated_state=self.populated_state,
+            populated_state_message=self.populated_state_message,
             elements=list(map(lambda e: e.serialize(id_encoder, serialization_options), self.elements))
         )
         serialization_options.attach_identifier(id_encoder, self, rval)
@@ -5666,7 +5668,7 @@ class HistoryDatasetCollectionAssociation(
                 break
         return matching_collection
 
-    def copy(self, element_destination=None, dataset_instance_attributes=None):
+    def copy(self, element_destination=None, dataset_instance_attributes=None, flush=True):
         """
         Create a copy of this history dataset collection association. Copy
         underlying collection.
@@ -5696,7 +5698,7 @@ class HistoryDatasetCollectionAssociation(
         if element_destination:
             element_destination.stage_addition(hdca)
             element_destination.add_pending_items()
-        else:
+        if flush:
             object_session(self).flush()
         return hdca
 
@@ -6288,6 +6290,9 @@ class Workflow(Base, Dictifiable, RepresentById):
         return "Workflow[id=%d%s]" % (self.id, extra)
 
 
+InputConnDictType = Dict[str, Union[Dict[str, Any], List[Dict[str, Any]]]]
+
+
 class WorkflowStep(Base, RepresentById):
     """
     WorkflowStep represents a tool or subworkflow, its inputs, annotations, and any outputs that are flagged as workflow outputs.
@@ -6312,6 +6317,7 @@ class WorkflowStep(Base, RepresentById):
     order_index = Column(Integer)
     uuid = Column(UUIDType)
     label = Column(Unicode(255))
+    temp_input_connections: Optional[InputConnDictType]
 
     subworkflow = relationship('Workflow',
         primaryjoin=(lambda: Workflow.id == WorkflowStep.subworkflow_id),  # type: ignore
@@ -8118,6 +8124,7 @@ class ItemTagAssociation(Dictifiable):
     dict_collection_visible_keys = ['id', 'user_tname', 'user_value']
     dict_element_visible_keys = dict_collection_visible_keys
     associated_item_names: List[str] = []
+    user_tname: Column
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

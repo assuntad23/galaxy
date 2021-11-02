@@ -116,12 +116,12 @@
                             <div class="m-1">
                                 <FormTool
                                     v-if="hasActiveNodeTool"
+                                    :key="activeNodeId"
                                     :get-manager="getManager"
                                     :get-node="getNode"
                                     :datatypes="datatypes"
                                     @onAnnotation="onAnnotation"
                                     @onLabel="onLabel"
-                                    @onChangeOutputDatatype="onChangeOutputDatatype"
                                     @onSetData="onSetData"
                                 />
                                 <FormDefault
@@ -175,6 +175,7 @@
 </template>
 
 <script>
+import { LastQueue } from "utils/promise-queue";
 import { getDatatypesMapper } from "components/Datatypes";
 import { fromSimple } from "./modules/model";
 import { getModule, getVersions, saveWorkflow, loadWorkflow } from "./modules/services";
@@ -279,6 +280,9 @@ export default {
         showLint() {
             return this.showInPanel == "lint";
         },
+        activeNodeId() {
+            return this.activeNode && this.activeNode.id;
+        },
         hasActiveNodeDefault() {
             return this.activeNode && this.activeNode.type != "tool";
         },
@@ -287,6 +291,7 @@ export default {
         },
     },
     created() {
+        this.lastQueue = new LastQueue();
         getDatatypesMapper().then((mapper) => {
             this.datatypesMapper = mapper;
             this.datatypes = mapper.datatypes;
@@ -470,13 +475,9 @@ export default {
         },
         onSetData(nodeId, newData) {
             const node = this.nodes[nodeId];
-            getModule(newData).then((data) => {
+            this.lastQueue.enqueue(getModule, newData).then((data) => {
                 node.setData(data);
             });
-        },
-        onChangeOutputDatatype(nodeId, outputName, newDatatype) {
-            const node = this.nodes[nodeId];
-            node.changeOutputDatatype(outputName, newDatatype);
         },
         onLabel(nodeId, newLabel) {
             const node = this.nodes[nodeId];

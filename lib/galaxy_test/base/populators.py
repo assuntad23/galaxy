@@ -343,8 +343,8 @@ class BaseDatasetPopulator(BasePopulator):
         delete_response = self._delete(f"histories/{history_id}")
         delete_response.raise_for_status()
 
-    def delete_dataset(self, history_id: str, content_id: str) -> Response:
-        delete_response = self._delete(f"histories/{history_id}/contents/{content_id}")
+    def delete_dataset(self, history_id: str, content_id: str, purge: bool = False) -> Response:
+        delete_response = self._delete(f"histories/{history_id}/contents/{content_id}", {'purge': purge})
         return delete_response
 
     def create_tool_from_path(self, tool_path: str) -> Dict[str, Any]:
@@ -564,7 +564,9 @@ class BaseDatasetPopulator(BasePopulator):
                 if history_content_id is None:
                     raise Exception(f"Could not find content with HID [{hid}] in [{history_contents}]")
             else:
-                # No hid specified - just grab most recent element.
+                # No hid specified - just grab most recent element of correct content type
+                if kwds.get('history_content_type'):
+                    history_contents = [c for c in history_contents if c['history_content_type'] == kwds['history_content_type']]
                 history_content_id = history_contents[-1]["id"]
         return history_content_id
 
@@ -591,6 +593,12 @@ class BaseDatasetPopulator(BasePopulator):
         roles_response = self._get("roles", admin=True)
         assert roles_response.status_code == 200
         return roles_response.json()
+
+    def get_configuration(self, admin=False) -> Dict[str, Any]:
+        response = self._get("configuration", admin=admin)
+        api_asserts.assert_status_code_is_ok(response)
+        configuration = response.json()
+        return configuration
 
     def user_email(self) -> str:
         users_response = self._get("users")
@@ -1454,7 +1462,7 @@ class BaseDatasetCollectionPopulator:
         payload = dict(
             instance_type="history",
             history_id=history_id,
-            element_identifiers=json.dumps(element_identifiers),
+            element_identifiers=element_identifiers,
             collection_type=collection_type,
             name=name,
         )
@@ -1588,7 +1596,7 @@ class BaseDatasetCollectionPopulator:
             del kwds["contents"]
 
         if "element_identifiers" not in kwds:
-            kwds["element_identifiers"] = json.dumps(identifiers_func(history_id, contents=contents))
+            kwds["element_identifiers"] = identifiers_func(history_id, contents=contents)
 
         if "name" not in kwds:
             kwds["name"] = "Test Dataset Collection"
@@ -1666,7 +1674,7 @@ class DatasetCollectionPopulator(BaseDatasetCollectionPopulator):
         self.dataset_populator = DatasetPopulator(galaxy_interactor)
 
     def _create_collection(self, payload: dict) -> Response:
-        create_response = self.galaxy_interactor.post("dataset_collections", data=payload)
+        create_response = self.galaxy_interactor.post("dataset_collections", data=payload, json=True)
         return create_response
 
 
@@ -1855,7 +1863,7 @@ class GiDatasetCollectionPopulator(GiHttpMixin, BaseDatasetCollectionPopulator):
         self.dataset_collection_populator = GiDatasetCollectionPopulator(gi)
 
     def _create_collection(self, payload):
-        create_response = self._post("dataset_collections", data=payload)
+        create_response = self._post("dataset_collections", data=payload, json=True)
         return create_response
 
 

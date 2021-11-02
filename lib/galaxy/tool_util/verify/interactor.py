@@ -90,6 +90,7 @@ class GalaxyInteractorApi:
 
     def __init__(self, **kwds):
         self.api_url = f"{kwds['galaxy_url'].rstrip('/')}/api"
+        self.cookies = None
         self.master_api_key = kwds["master_api_key"]
         self.api_key = self.__get_user_key(kwds.get("api_key"), kwds.get("master_api_key"), test_user=kwds.get("test_user"))
         if kwds.get('user_api_key_is_admin_key', False):
@@ -480,11 +481,11 @@ class GalaxyInteractorApi:
     def _create_collection(self, history_id, collection_def):
         create_payload = dict(
             name=collection_def.name,
-            element_identifiers=dumps(self._element_identifiers(collection_def)),
+            element_identifiers=self._element_identifiers(collection_def),
             collection_type=collection_def.collection_type,
             history_id=history_id,
         )
-        return self._post("dataset_collections", data=create_payload).json()["id"]
+        return self._post("dataset_collections", data=create_payload, json=True).json()["id"]
 
     def _element_identifiers(self, collection_def):
         element_identifiers = []
@@ -728,14 +729,17 @@ class GalaxyInteractorApi:
     def _get(self, path, data=None, key=None, headers=None, admin=False, anon=False):
         headers = self.api_key_header(key=key, admin=admin, anon=anon, headers=headers)
         url = self.get_api_url(path)
+        kwargs = {}
+        if self.cookies:
+            kwargs['cookies'] = self.cookies
         # no data for GET
-        return requests.get(url, params=data, headers=headers, timeout=util.DEFAULT_SOCKET_TIMEOUT)
+        return requests.get(url, params=data, headers=headers, timeout=util.DEFAULT_SOCKET_TIMEOUT, **kwargs)
 
     def get_api_url(self, path: str) -> str:
         if path.startswith("http"):
             return path
-        elif path.startswith("/api"):
-            path = path[len("/api"):]
+        elif path.startswith("/api/"):
+            path = path[len("/api/"):]
         return f"{self.api_url}/{path}"
 
     def _prepare_request_params(self, data=None, files=None, as_json: bool = False, params: dict = None, headers: dict = None):
@@ -782,6 +786,8 @@ class GalaxyInteractorApi:
         else:
             data.update(params)
             kwd['data'] = data
+        if self.cookies:
+            kwd['cookies'] = self.cookies
 
         return kwd
 

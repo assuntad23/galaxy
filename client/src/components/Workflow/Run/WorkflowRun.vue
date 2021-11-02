@@ -1,6 +1,7 @@
 <template>
     <span>
         <b-alert variant="danger" show v-if="error">
+            <h5>Workflow cannot be executed. Please resolve the following issue:</h5>
             {{ error }}
         </b-alert>
         <span v-else>
@@ -62,7 +63,10 @@ export default {
         WorkflowRunFormSimple,
     },
     props: {
-        workflowId: { type: String },
+        workflowId: {
+            type: String,
+            required: true,
+        },
         preferSimpleForm: {
             type: Boolean,
             default: false,

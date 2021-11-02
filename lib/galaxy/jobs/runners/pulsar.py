@@ -376,7 +376,7 @@ class PulsarJobRunner(AsynchronousJobRunner):
             remote_pulsar_app_config = dest_params.get("pulsar_app_config", {}).copy()
             if "pulsar_app_config_path" in dest_params:
                 pulsar_app_config_path = dest_params["pulsar_app_config_path"]
-                with open(pulsar_app_config_path, "r") as fh:
+                with open(pulsar_app_config_path) as fh:
                     remote_pulsar_app_config.update(yaml.safe_load(fh))
             job_directory_files = []
             config_files = job_wrapper.extra_filenames
@@ -754,8 +754,6 @@ class PulsarJobRunner(AsynchronousJobRunner):
         return job_state
 
     def __client_outputs(self, client, job_wrapper):
-        work_dir_outputs = self.get_work_dir_outputs(job_wrapper)
-        output_files = self.get_output_files(job_wrapper)
         metadata_directory = os.path.join(job_wrapper.working_directory, "metadata")
         metadata_strategy = job_wrapper.get_destination_configuration('metadata_strategy', None)
         tool = job_wrapper.tool
@@ -767,6 +765,8 @@ class PulsarJobRunner(AsynchronousJobRunner):
             # if Pulsar is doing remote metadata and the remote metadata is extended,
             # we only need to recover the final model store.
             dynamic_outputs = EXTENDED_METADATA_DYNAMIC_COLLECTION_PATTERN
+            output_files = []
+            work_dir_outputs = []
         else:
             # otherwise collect everything we might need
             dynamic_outputs = DEFAULT_DYNAMIC_COLLECTION_PATTERN[:]
@@ -774,6 +774,8 @@ class PulsarJobRunner(AsynchronousJobRunner):
             dynamic_outputs.extend(job_wrapper.tool.output_discover_patterns)
             # grab tool provided metadata (galaxy.json) also...
             dynamic_outputs.append(re.escape(tool_provided_metadata_file_path))
+            output_files = self.get_output_files(job_wrapper)
+            work_dir_outputs = self.get_work_dir_outputs(job_wrapper)
         dynamic_file_sources = [
             {"path": tool_provided_metadata_file_path, "type": "galaxy" if tool_provided_metadata_style == "default" else "legacy_galaxy"}
         ]

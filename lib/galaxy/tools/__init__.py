@@ -222,6 +222,7 @@ WORKFLOW_SAFE_TOOL_VERSION_UPDATES = {
     'Grep1': safe_update(packaging.version.parse("1.0.1"), packaging.version.parse("1.0.3")),
     'Show beginning1': safe_update(packaging.version.parse("1.0.0"), packaging.version.parse("1.0.1")),
     'Show tail1': safe_update(packaging.version.parse("1.0.0"), packaging.version.parse("1.0.1")),
+    'sort1': safe_update(packaging.version.parse("1.1.0"), packaging.version.parse("1.2.0")),
 }
 
 
@@ -2318,8 +2319,9 @@ class Tool(Dictifiable):
             group_state = state_inputs.get(input.name, {})
             if input.type == 'repeat':
                 tool_dict = input.to_dict(request_context)
-                group_cache = tool_dict['cache'] = {}
-                for i in range(len(group_state)):
+                group_size = len(group_state)
+                group_cache = tool_dict['cache'] = [None] * group_size
+                for i in range(group_size):
                     group_cache[i] = []
                     self.populate_model(request_context, input.inputs, group_state[i], group_cache[i], other_values)
             elif input.type == 'conditional':
@@ -2693,10 +2695,11 @@ class SetMetadataTool(Tool):
 
     def regenerate_imported_metadata_if_needed(self, hda, history, job):
         if len(hda.metadata_file_types) > 0:
-            self.tool_action.execute_via_app(
+            job, *_ = self.tool_action.execute_via_app(
                 self, self.app, job.session_id,
                 history.id, job.user, incoming={'input1': hda}, overwrite=False
             )
+            self.app.job_manager.enqueue(job=job, tool=self)
 
     def exec_after_process(self, app, inp_data, out_data, param_dict, job=None, **kwds):
         working_directory = app.object_store.get_filename(

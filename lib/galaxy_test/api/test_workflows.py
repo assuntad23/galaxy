@@ -943,7 +943,7 @@ steps:
 """)
             invocation_response = self.__invoke_workflow(workflow_id, history_id=history_id, assert_ok=False)
             self._assert_status_code_is(invocation_response, 400)
-            self.assertEqual(invocation_response.json().get('err_msg'), "Workflow was not invoked; some required tools are not installed.")
+            self.assertEqual(invocation_response.json().get('err_msg'), "Workflow was not invoked; the following required tools are not installed: nonexistent_tool")
 
     @skip_without_tool("collection_creates_pair")
     def test_workflow_run_output_collections(self) -> None:
@@ -1761,6 +1761,16 @@ input_c:
         run_workflow_response = self.workflow_populator.invoke_workflow_raw(workflow_id, workflow_request, assert_ok=True)
         invocation_id = run_workflow_response.json()["id"]
         self.wait_for_invocation_and_jobs(history_id, workflow_id, invocation_id)
+
+    def test_workflow_new_autocreated_history(self):
+        workflow = self.workflow_populator.load_workflow(name="test_for_new_autocreated_history")
+        workflow_request, history_id, workflow_id = self._setup_workflow_run(workflow)
+        del workflow_request['history']  # Not passing a history param means asking for a new history to be automatically created
+        run_workflow_dict = self.workflow_populator.invoke_workflow_raw(workflow_id, workflow_request, assert_ok=True).json()
+        new_history_id = run_workflow_dict["history_id"]
+        assert history_id != new_history_id
+        invocation_id = run_workflow_dict["id"]
+        self.wait_for_invocation_and_jobs(new_history_id, workflow_id, invocation_id)
 
     def test_workflow_output_dataset(self):
         with self.dataset_populator.test_history() as history_id:
@@ -2953,6 +2963,12 @@ outer_input:
         workflow_request["history"] = f"hist_id={other_history_id}"
         run_workflow_response = self._post(f"workflows/{workflow_id}/invocations", data=workflow_request)
         self._assert_status_code_is(run_workflow_response, 403)
+
+    def test_cannot_run_bootstrap_admin_workflow(self):
+        workflow = self.workflow_populator.load_workflow(name="test_bootstrap_admin_cannot_run")
+        workflow_request, *_ = self._setup_workflow_run(workflow)
+        run_workflow_response = self._post("workflows", data=workflow_request, key=self.master_api_key, json=True)
+        self._assert_status_code_is(run_workflow_response, 400)
 
     @skip_without_tool("cat")
     @skip_without_tool("cat_list")

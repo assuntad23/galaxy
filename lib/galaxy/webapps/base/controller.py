@@ -403,7 +403,7 @@ class UsesLibraryMixinItems(SharableItemSecurityMixin):
         this check.
         """
         if not trans.user:
-            return False
+            raise exceptions.ItemAccessibilityException("Anonymous users cannot add to library items")
 
         current_user_roles = trans.get_current_user_roles()
         if trans.user_is_admin:
@@ -1471,7 +1471,7 @@ class UsesExtendedMetadataMixin(SharableItemSecurityMixin):
         else:
             # BUG: Everything is cast to string, which can lead to false positives
             # for cross type comparisions, ie "True" == True
-            yield prefix, (f"{meta}").encode("utf8", errors='replace')
+            yield prefix, (f"{meta}").encode()
 
 
 def sort_by_attr(seq, attr):

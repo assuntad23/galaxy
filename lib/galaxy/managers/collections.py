@@ -20,7 +20,10 @@ from galaxy.security.idencoding import IdEncodingHelper
 from galaxy.util import (
     validation
 )
-from .hdas import HDAManager
+from .hdas import (
+    HDAManager,
+    HistoryDatasetAssociationNoHistoryException,
+)
 from .histories import HistoryManager
 from .lddas import LDDAManager
 
@@ -54,7 +57,7 @@ class DatasetCollectionManager:
 
         self.hda_manager = hda_manager
         self.history_manager = history_manager
-        self.tag_handler = tag_handler
+        self.tag_handler = tag_handler.create_tag_handler_session()
         self.ldda_manager = ldda_manager
 
     def precreate_dataset_collection_instance(self, trans, parent, name, structure, implicit_inputs=None, implicit_output_name=None, tags=None, completed_collection=None):
@@ -179,7 +182,7 @@ class DatasetCollectionManager:
         # values.
         if isinstance(tags, list):
             assert implicit_inputs is None, implicit_inputs
-            tags = self.tag_handler.add_tags_from_list(trans.user, dataset_collection_instance, tags)
+            tags = self.tag_handler.add_tags_from_list(trans.user, dataset_collection_instance, tags, flush=False)
         else:
             tags = self._append_tags(dataset_collection_instance, implicit_inputs, tags)
         return self.__persist(dataset_collection_instance, flush=flush)
@@ -205,6 +208,8 @@ class DatasetCollectionManager:
                                                              hide_source_items=hide_source_items,
                                                              copy_elements=copy_elements,
                                                              history=history)
+            if history:
+                history.add_pending_items()
         else:
             if has_subcollections:
                 # Nested collection - recursively create collections as needed.
@@ -297,7 +302,11 @@ class DatasetCollectionManager:
 
         if recursive:
             for dataset in dataset_collection_instance.collection.dataset_instances:
-                self.hda_manager.error_unless_owner(dataset, user=trans.get_user(), current_history=trans.history)
+                try:
+                    self.hda_manager.error_unless_owner(dataset, user=trans.get_user(), current_history=trans.history)
+                except HistoryDatasetAssociationNoHistoryException:
+                    log.info(f"Cannot delete HistoryDatasetAssociation {dataset.id}, HistoryDatasetAssociation has no associated History, cannot verify owner")
+                    continue
                 if not dataset.deleted:
                     dataset.deleted = True
 
@@ -332,7 +341,7 @@ class DatasetCollectionManager:
             copy_kwds["element_destination"] = parent  # e.g. a history
         if dataset_instance_attributes is not None:
             copy_kwds["dataset_instance_attributes"] = dataset_instance_attributes
-        new_hdca = source_hdca.copy(**copy_kwds)
+        new_hdca = source_hdca.copy(flush=False, **copy_kwds)
         new_hdca.copy_tags_from(target_user=trans.get_user(), source=source_hdca)
         if not copy_elements:
             parent.add_dataset_collection(new_hdca)
@@ -486,16 +495,16 @@ class DatasetCollectionManager:
             decoded_id = int(trans.app.security.decode_id(encoded_id))
             hda = self.hda_manager.get_accessible(decoded_id, trans.user)
             if copy_elements:
-                element = self.hda_manager.copy(hda, history=history or trans.history, hide_copy=True)
+                element = self.hda_manager.copy(hda, history=history or trans.history, hide_copy=True, flush=False)
             else:
                 element = hda
             if hide_source_items and self.hda_manager.get_owned(hda.id, user=trans.user, current_history=history or trans.history):
                 hda.visible = False
-            self.tag_handler.apply_item_tags(user=trans.user, item=element, tags_str=tag_str)
+            self.tag_handler.apply_item_tags(user=trans.user, item=element, tags_str=tag_str, flush=False)
         elif src_type == 'ldda':
             element = self.ldda_manager.get(trans, encoded_id, check_accessible=True)
             element = element.to_history_dataset_association(history or trans.history, add_to_history=True, visible=not hide_source_items)
-            self.tag_handler.apply_item_tags(user=trans.user, item=element, tags_str=tag_str)
+            self.tag_handler.apply_item_tags(user=trans.user, item=element, tags_str=tag_str, flush=False)
         elif src_type == 'hdca':
             # TODO: Option to copy? Force copy? Copy or allow if not owned?
             element = self.__get_history_collection_instance(trans, encoded_id).collection
@@ -636,8 +645,14 @@ class DatasetCollectionManager:
                 raise ItemAccessibilityException("LibraryDatasetCollectionAssociation is not accessible to the current user", type='error')
         return collection_instance
 
-    def get_collection_contents_qry(self, parent_id, limit=None, offset=None):
+    def get_collection_contents(self, trans, parent_id, limit=None, offset=None):
         """Find first level of collection contents by containing collection parent_id"""
+        contents_qry = self._get_collection_contents_qry(parent_id, limit=limit, offset=offset)
+        contents = contents_qry.with_session(trans.sa_session()).all()
+        return contents
+
+    def _get_collection_contents_qry(self, parent_id, limit=None, offset=None):
+        """Build query to find first level of collection contents by containing collection parent_id"""
         DCE = model.DatasetCollectionElement
         qry = Query(DCE).filter(DCE.dataset_collection_id == parent_id)
         qry = qry.order_by(DCE.element_index)
