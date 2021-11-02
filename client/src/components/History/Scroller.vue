@@ -137,8 +137,7 @@ export default {
         // the mouse wheel, and must be updated when new contents come in
         itemStartIndex() {
             const index = this.manualStartIndex ?? this.startKeyIndex;
-            const shift = (this.getExpandedRowHeight() / this.getFirstRowHeight()) * this.expandedCount;
-            const end = this.contents.length - this.pageSize + 5 + Math.floor(shift);
+            const end = this.contents.length - this.pageSize + 5 + this.getExpandedRowSize() * this.expandedCount;
             console.log("THE BEGINNING IS ... ", index);
             console.log("THE END IS ...", end);
             return clamp(index, 0, end);
@@ -150,6 +149,7 @@ export default {
             // const top = clamp(this.itemStartIndex, 0, this.contents.length - this.pageSize);
             // const bottom = clamp(this.itemStartIndex + this.pageSize, 0, this.contents.length + 1);
             // return this.contents.slice(top, bottom);
+            console.log("FROM ", this.itemStartIndex, " TO ", this.itemStartIndex + this.pageSize);
             console.log("ARR: ", this.contents.slice(this.itemStartIndex, this.itemStartIndex + this.pageSize));
             return this.contents.slice(this.itemStartIndex, this.itemStartIndex + this.pageSize);
         },
@@ -317,9 +317,19 @@ export default {
             return parseInt(rowHeight);
         },
 
+        getCollapsedRowHeight() {
+            const rowHeight = this.$refs?.listing?.querySelector("ul > li > div:not(.expanded)")?.offsetHeight || 10;
+            return parseInt(rowHeight);
+        },
+
         getExpandedRowHeight() {
-            const expRowHeight = this.$refs?.listing?.querySelector("ul > li > div.expanded")?.offsetHeight || 10;
+            const expRowHeight = this.$refs?.listing?.querySelector("ul > li > div.expanded")?.offsetHeight || 50;
             return parseInt(expRowHeight);
+        },
+
+        getExpandedRowSize() {
+            console.log("FRH: ", this.getCollapsedRowHeight(), "ERH: ", this.getExpandedRowHeight(), "TOT: ", Math.ceil(this.getExpandedRowHeight() / this.getCollapsedRowHeight()));
+            return Math.ceil(this.getExpandedRowHeight() / this.getCollapsedRowHeight());
         },
 
         setScrollTop(newScrollTop) {
