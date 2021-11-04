@@ -99,6 +99,7 @@ export const ContentProvider = {
         setScrollPos({ cursor = null, key = null } = {}) {
             if (isValidNumber(cursor) || key !== null) {
                 this.scrollPos = ScrollPos.create({ cursor, key });
+                console.log("SCROLLPOS", this.scrollPos);
             }
         },
 

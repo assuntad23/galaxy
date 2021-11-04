@@ -63,30 +63,16 @@
                     <template v-slot:listing>
                         <HistoryEmpty v-if="history.empty" class="m-2" />
                         <HistoryEmpty v-else-if="payload && payload.noResults" message="No Results." class="m-2" />
-                        <div
+                        <InfiniteHistory
                             v-else-if="payload"
-                            v-infinite-scroll="getMoreContent(setScrollPos, payload)"
-                            infinite-scroll-disabled="busy"
-                            infinite-scroll-distance="10"
-                            :class="{ loadingBackground: loading }"
-                        >
-                            <div v-for="(item, index, rowKey) in historyItems" :key="rowKey">
-                                <HistoryContentItem
-                                    :item="item"
-                                    :index="index"
-                                    :row-key="rowKey"
-                                    :show-selection="showSelection"
-                                    :expanded="isExpanded(item)"
-                                    @update:expanded="setExpanded(item, $event)"
-                                    :selected="isSelected(item)"
-                                    @update:selected="setSelected(item, $event)"
-                                    @viewCollection="$emit('viewCollection', item)"
-                                    :data-hid="item.hid"
-                                    :data-index="index"
-                                    :data-row-key="rowKey"
-                                />
-                            </div>
-                        </div>
+                            :setScrollPos="setScrollPos"
+                            :payload="payload"
+                            :showSelection="showSelection"
+                            :isExpanded="isExpanded"
+                            :setExpanded="setExpanded"
+                            :isSelected="isSelected"
+                            :setSelected="setSelected"
+                        />
                     </template>
 
                     <template v-slot:modals>
@@ -112,6 +98,8 @@ import { HistoryContentItem } from "./ContentItem";
 import { reportPayload } from "./providers/ContentProvider/helpers";
 import HistoryMenu from "./HistoryMenu";
 import infiniteScroll from "vue-infinite-scroll";
+import { setTimeout } from "timers";
+import InfiniteHistory from "./InfiniteHistory.vue";
 
 export default {
     filters: {
@@ -131,6 +119,7 @@ export default {
         ExpandedItems,
         SelectedItems,
         HistoryMenu,
+        InfiniteHistory,
     },
     props: {
         history: { type: History, required: true },
@@ -140,7 +129,7 @@ export default {
             params: new SearchParams(),
             useItemSelection: false,
             busy: false,
-            historyItems: []
+            historyItems: [],
         };
     },
     computed: {
@@ -151,13 +140,17 @@ export default {
     methods: {
         getMoreContent(setScrollPos, payload) {
             this.busy = true;
+            console.log("PAYLOAD ", payload);
             console.log("HERE: ", payload.contents.length, payload.totalMatches);
             setTimeout(() => {
+                console.log("Length", payload.contents.length);
+                console.log("matches", payload.totalMatches);
                 const data = { cursor: payload.contents.length / payload.totalMatches };
                 //TODO: we might need to swap out setScrollPos & in content provider with something more simple.
+                console.log("BIG DATA HERE ", data);
                 setScrollPos(data);
                 this.busy = false;
-            }, 1000);
+            }, 2000);
         },
     },
 };
