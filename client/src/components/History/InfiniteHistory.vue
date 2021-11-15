@@ -29,6 +29,7 @@
 import { HistoryContentItem } from "./ContentItem";
 import infiniteScroll from "vue-infinite-scroll";
 import { setTimeout } from "timers";
+import { SearchParams } from "./model";
 export default {
     directives: { infiniteScroll },
     components: {
@@ -38,13 +39,12 @@ export default {
         return {
             initialLoad: true,
             data: [],
-            count: 0,
+            count: 1,
         };
     },
     computed: {
         getData() {
             console.log("DATA SIZE:", this.data.length);
-            console.log("MORE DATA TIMES: ",this.count);
             return this.data;
         },
     },
@@ -56,6 +56,7 @@ export default {
         setExpanded: { type: Function, required: true },
         isSelected: { type: Function, required: true },
         setSelected: { type: Function, required: true },
+        pageSize: { type: Number, default: SearchParams.pageSize },
     },
     methods: {
         getMoreContent() {
@@ -68,13 +69,18 @@ export default {
             // console.log("PAYLOAD ", this.payload);
             // console.log("HERE: ", this.payload.contents.length, this.payload.totalMatches);
             setTimeout(() => {
-                this.data.push(...this.payload.contents);
-                const pload = { cursor: this.getData.length / this.payload.totalMatches };
-                console.log("MATH: ", this.getData.length, "/", this.payload.totalMatches, "=", pload);
+                this.data.push(...this.payload.contents); //@DANNON: I wonder if this is the wrong place to be pushing the payload contents... What do you think?
+                // const pload = { cursor: this.getData.length / this.payload.totalMatches };
+                const pload = { cursor: this.getData.length / 1003 }; // @DANNON:^ that should replace this line, this is temporary, since I know the totalMatches, but the payload isn't returning the total
+                console.log("MATH: ", this.getData.length, "/", 1003, "=", pload);
                 this.setScrollPos(pload);
-                this.count++; 
+                this.count++;
                 this.busy = false;
             }, 2000);
+
+            console.log("PAYLOAD AFTER", this.payload.contents); //this matches what I find in the history
+
+            console.log("COUNT IS: ", this.count); //just to keep track of how often we're in here, i.e. that I'm not the one creating the multiple requests
         },
     },
 };

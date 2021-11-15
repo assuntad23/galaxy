@@ -26,6 +26,7 @@ export const loadHistoryContents = (cfg = {}) => (rawInputs$) => {
         noInitial = false,
         windowSize = SearchParams.pageSize
     } = cfg;
+    console.log("WINDOW SIZE: ", windowSize);
 
     const inputs$ = rawInputs$.pipe(
         hydrate([undefined, SearchParams]),
@@ -35,7 +36,8 @@ export const loadHistoryContents = (cfg = {}) => (rawInputs$) => {
 
     const ajaxResponse$ = inputs$.pipe(
         map(([id, params, hid]) => {
-            const baseUrl = `/api/histories/${id}/contents/near/${hid}/${windowSize}`;
+            console.log("building ajax request");
+            const baseUrl = `/api/histories/${id}/contents/before/${hid}/${windowSize}`;
             return `${baseUrl}?${params.historyContentQueryString}`;
         }),
         map(prependPath),
@@ -70,8 +72,10 @@ export const loadHistoryContents = (cfg = {}) => (rawInputs$) => {
             }
 
             // header counts
+            const matches = headerInt("matches")
             const matchesUp = headerInt("matches_up");
             const matchesDown = headerInt("matches_down");
+            const totalMatches = headerInt("total_matches")
             const totalMatchesUp = headerInt("total_matches_up");
             const totalMatchesDown = headerInt("total_matches_down");
             const minHid = headerInt("min_hid");
@@ -79,8 +83,8 @@ export const loadHistoryContents = (cfg = {}) => (rawInputs$) => {
             const historySize = headerInt("history_size");
             const historyEmpty = headerBool("history_empty");
 
-            const matches = areDefined(matchesUp, matchesDown) ? matchesUp + matchesDown : undefined;
-            const totalMatches = areDefined(totalMatchesUp, totalMatchesDown) ? totalMatchesUp + totalMatchesDown : undefined;
+            // const matches = areDefined(matchesUp, matchesDown) ? matchesUp + matchesDown : undefined;
+            // const totalMatches = areDefined(totalMatchesUp, totalMatchesDown) ? totalMatchesUp + totalMatchesDown : undefined;
 
             return {
                 summary,

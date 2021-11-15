@@ -28,6 +28,7 @@ export default {
             const parent$ = this.watch$("history");
             const sources = { params$, parent$, scrollPos$ };
             const settings = { disablePoll, debouncePeriod, pageSize, debug };
+            console.log("init streams");
             return processContentStreams(contentPayload, sources, settings);
         },
     },

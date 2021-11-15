@@ -95,6 +95,7 @@ export const contentPayload = (cfg = {}) => {
             share(),
         );
 
+        console.log("declare serverload");
         const serverLoad$ = serverHid$.pipe(
             tap(() => loadingEvents$.next(true)),
             loadContents({ history, filters, disablePoll, debug }),
@@ -150,6 +151,7 @@ export const contentPayload = (cfg = {}) => {
             filter(([a,b]) => !isNaN(a.maxHid) && !isNaN(b.maxHid)),
             withLatestFrom(pos$, hid$),
             map(([[lastResponse, response], pos, hid]) => {
+                console.log("IN adjustedScrollPos");
                 const updatesAtTop = response.maxHid >= lastResponse.maxHid;
 
                 const scrollerExactlyAtTop = pos.cursor === 0 || pos.key === lastResponse.maxHid;
