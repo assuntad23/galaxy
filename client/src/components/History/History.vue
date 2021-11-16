@@ -72,6 +72,7 @@
                             :setExpanded="setExpanded"
                             :isSelected="isSelected"
                             :setSelected="setSelected"
+                            :loading="loading"
                         />
                     </template>
 
@@ -94,7 +95,7 @@ import HistoryEmpty from "./HistoryEmpty";
 import ContentOperations from "./ContentOperations";
 import ToolHelpModal from "./ToolHelpModal";
 // import Scroller from "./Scroller";
-import { HistoryContentItem } from "./ContentItem";
+// import { HistoryContentItem } from "./ContentItem";
 import { reportPayload } from "./providers/ContentProvider/helpers";
 import HistoryMenu from "./HistoryMenu";
 import infiniteScroll from "vue-infinite-scroll";
@@ -115,7 +116,7 @@ export default {
         ContentOperations,
         ToolHelpModal,
         // InfiniteScroll,
-        HistoryContentItem,
+        // HistoryContentItem,
         ExpandedItems,
         SelectedItems,
         HistoryMenu,

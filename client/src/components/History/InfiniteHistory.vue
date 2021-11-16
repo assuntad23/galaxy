@@ -51,12 +51,13 @@ export default {
     props: {
         setScrollPos: { type: Function, required: true },
         payload: { required: true },
-        showSelection: { type: Function, required: true },
+        showSelection: { type: Boolean, required: true },
         isExpanded: { type: Function, required: true },
         setExpanded: { type: Function, required: true },
         isSelected: { type: Function, required: true },
         setSelected: { type: Function, required: true },
         pageSize: { type: Number, default: SearchParams.pageSize },
+        loading: {type: Boolean, required: true}
     },
     methods: {
         getMoreContent() {
