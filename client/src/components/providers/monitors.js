@@ -118,7 +118,6 @@ export const buildHistoryMonitor = (historyId, monitorEvery = 3000) => {
     // temporary hack until we can subscribe to invocations and their outputs.
     // set large windowSize around which to monitor (could we just monitor all updates?)
     const windowSize = 100000;
-    console.log("build history monitor");
     return of([historyId, {showHidden: true, showVisible: true}, 1]).pipe(
         // noInitial skips fetching exisiting datasets and only monitors
         // for updated datastes after the last query (or now, if this is the first query)

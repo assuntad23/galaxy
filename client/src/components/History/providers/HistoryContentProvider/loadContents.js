@@ -39,7 +39,6 @@ export const loadContents = (cfg = {}) => {
     );
 
     return switchMap((hid) => {
-        console.log("switchmap");
         const request$ = singleLoad(hid);
         return disablePoll ? request$ : poll(request$);
     })

@@ -26,7 +26,6 @@ export const loadHistoryContents = (cfg = {}) => (rawInputs$) => {
         noInitial = false,
         windowSize = SearchParams.pageSize
     } = cfg;
-    console.log("WINDOW SIZE: ", windowSize);
 
     const inputs$ = rawInputs$.pipe(
         hydrate([undefined, SearchParams]),
@@ -36,7 +35,6 @@ export const loadHistoryContents = (cfg = {}) => (rawInputs$) => {
 
     const ajaxResponse$ = inputs$.pipe(
         map(([id, params, hid]) => {
-            console.log("building ajax request");
             const baseUrl = `/api/histories/${id}/contents/before/${hid}/${windowSize}`;
             return `${baseUrl}?${params.historyContentQueryString}`;
         }),
@@ -82,9 +80,6 @@ export const loadHistoryContents = (cfg = {}) => (rawInputs$) => {
             const maxHid = headerInt("max_hid");
             const historySize = headerInt("history_size");
             const historyEmpty = headerBool("history_empty");
-
-            // const matches = areDefined(matchesUp, matchesDown) ? matchesUp + matchesDown : undefined;
-            // const totalMatches = areDefined(totalMatchesUp, totalMatchesDown) ? totalMatchesUp + totalMatchesDown : undefined;
 
             return {
                 summary,

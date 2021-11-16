@@ -71,9 +71,7 @@ export default {
             // console.log("HERE: ", this.payload.contents.length, this.payload.totalMatches);
             setTimeout(() => {
                 this.data.push(...this.payload.contents); //@DANNON: I wonder if this is the wrong place to be pushing the payload contents... What do you think?
-                // const pload = { cursor: this.getData.length / this.payload.totalMatches };
-                const pload = { cursor: this.getData.length / 1003 }; // @DANNON:^ that should replace this line, this is temporary, since I know the totalMatches, but the payload isn't returning the total
-                console.log("MATH: ", this.getData.length, "/", 1003, "=", pload);
+                const pload = { cursor: this.getData.length / this.payload.totalMatches };
                 this.setScrollPos(pload);
                 this.count++;
                 this.busy = false;
