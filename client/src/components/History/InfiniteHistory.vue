@@ -30,6 +30,7 @@ import { HistoryContentItem } from "./ContentItem";
 import infiniteScroll from "vue-infinite-scroll";
 import { setTimeout } from "timers";
 import { SearchParams } from "./model";
+import Vue from "vue";
 export default {
     directives: { infiniteScroll },
     components: {
@@ -45,7 +46,7 @@ export default {
     computed: {
         getData() {
             console.log("DATA SIZE:", this.data.length);
-            return this.data;
+            return this.data.filter((value, index) => value).reverse();
         },
     },
     props: {
@@ -57,29 +58,26 @@ export default {
         isSelected: { type: Function, required: true },
         setSelected: { type: Function, required: true },
         pageSize: { type: Number, default: SearchParams.pageSize },
-        loading: {type: Boolean, required: true}
+        loading: { type: Boolean, required: true },
     },
     methods: {
         getMoreContent() {
             this.busy = true;
-
-            // if (this.initialLoad == true) {
-            //     this.data.push(this.payload.contents);
-            //     this.initialLoad = false;
-            // }
-            // console.log("PAYLOAD ", this.payload);
-            // console.log("HERE: ", this.payload.contents.length, this.payload.totalMatches);
             setTimeout(() => {
-                this.data.push(...this.payload.contents); //@DANNON: I wonder if this is the wrong place to be pushing the payload contents... What do you think?
+                this.addNewContentToData();
+                console.log("MATH: ", this.getData.length, "/", this.payload.totalMatches, "=", pload);
                 const pload = { cursor: this.getData.length / this.payload.totalMatches };
                 this.setScrollPos(pload);
                 this.count++;
                 this.busy = false;
             }, 2000);
-
-            console.log("PAYLOAD AFTER", this.payload.contents); //this matches what I find in the history
-
-            console.log("COUNT IS: ", this.count); //just to keep track of how often we're in here, i.e. that I'm not the one creating the multiple requests
+        },
+        addNewContentToData() {
+            console.log(this.payload.contents);
+            // is this too wasteful with regards to memory?
+            for (let i = 0; i < this.payload.contents.length; i++) {
+                Vue.set(this.data, this.payload.contents[i].hid, this.payload.contents[i]);
+            }
         },
     },
 };
