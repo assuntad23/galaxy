@@ -29,7 +29,6 @@
 import { HistoryContentItem } from "./ContentItem";
 import infiniteScroll from "vue-infinite-scroll";
 import { setTimeout } from "timers";
-import { SearchParams } from "./model";
 import Vue from "vue";
 export default {
     directives: { infiniteScroll },
@@ -40,12 +39,12 @@ export default {
         return {
             initialLoad: true,
             data: [],
-            count: 1,
         };
     },
     computed: {
         getData() {
             console.log("DATA SIZE:", this.data.length);
+            //this reverse sort is a problem...
             return this.data.filter((value, index) => value).reverse();
         },
     },
@@ -57,7 +56,6 @@ export default {
         setExpanded: { type: Function, required: true },
         isSelected: { type: Function, required: true },
         setSelected: { type: Function, required: true },
-        pageSize: { type: Number, default: SearchParams.pageSize },
         loading: { type: Boolean, required: true },
     },
     methods: {
@@ -68,7 +66,6 @@ export default {
                 console.log("MATH: ", this.getData.length, "/", this.payload.totalMatches, "=", pload);
                 const pload = { cursor: this.getData.length / this.payload.totalMatches };
                 this.setScrollPos(pload);
-                this.count++;
                 this.busy = false;
             }, 2000);
         },
