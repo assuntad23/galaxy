@@ -32,6 +32,13 @@
                 :type="type" />
             <FormColor v-else-if="type == 'color'" :id="id" v-model="currentValue" />
             <FormDirectory v-else-if="type == 'directory_uri'" v-model="currentValue" />
+            <FieldSelect
+                v-else-if="
+                    (type == 'select') | (type == 'data_column') | (type == 'genomebuild') | (type == 'group_tag')
+                "
+                :id="id"
+                v-model="currentValue"
+                :attributes="attrs" />
             <FormParameter
                 v-else-if="backbonejs"
                 :id="id"
@@ -40,6 +47,7 @@
                 :data-label="title"
                 :type="type"
                 :attributes="attrs" />
+
             <FormInput v-else :id="id" v-model="currentValue" :area="attrs['area']" />
         </div>
         <div v-if="showPreview" class="ui-form-preview" v-html="previewText" />
@@ -56,6 +64,7 @@ import FormParameter from "./Elements/FormParameter";
 import FormColor from "./Elements/FormColor";
 import FormDirectory from "./Elements/FormDirectory";
 import FormNumber from "./Elements/FormNumber";
+import FieldSelect from "./Elements/FieldSelect";
 
 export default {
     components: {
@@ -66,6 +75,7 @@ export default {
         FormColor,
         FormParameter,
         FormDirectory,
+        FieldSelect,
     },
     props: {
         id: {
