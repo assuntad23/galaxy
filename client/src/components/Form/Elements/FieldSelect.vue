@@ -82,7 +82,11 @@ export default {
         optionSelect() {
             const arrayOfObjects = [];
             for (let index = 0; index < this.attributes.options.length; index++) {
-                const obj = { first: this.attributes.options[index][0], second: this.attributes.options[index][1], third: this.attributes.options[index][2]} 
+                const obj = {
+                    first: this.attributes.options[index][0],
+                    second: this.attributes.options[index][1],
+                    third: this.attributes.options[index][2],
+                };
                 arrayOfObjects.push(obj);
             }
             return arrayOfObjects;
