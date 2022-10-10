@@ -15,19 +15,18 @@
             :data-label="title"
             :type="type"
             :attributes="attributes" />
-        <b-alert v-else-if="optionSelect.length == 0" show variant="info">
+        <b-alert v-else-if="optionList.length == 0" show variant="info">
             {{ error_text }}
         </b-alert>
         <multiselect
-            v-else-if="optionSelect.length"
-            v-model="initialOption"
+            v-else-if="optionList.length"
+            v-model="currentValue"
             deselect-label="Can't remove this value"
-            track-by="first"
-            label="first"
-            :options="optionSelect"
+            track-by="0"
+            :options="optionList"
             :searchable="true"
             :allow-empty="false">
-            {{ initialOption }}>
+            {{ currentValue }}>
         </multiselect>
     </div>
 </template>
@@ -76,20 +75,20 @@ export default {
         };
     },
     computed: {
+        currentValue: {
+            get() {
+                return this.value;
+            },
+            set(val) {
+                console.log("Value is: ", val);
+                this.$emit("input", val);
+            },
+        },
         data() {
             return this.attributes.data;
         },
-        optionSelect() {
-            const arrayOfObjects = [];
-            for (let index = 0; index < this.attributes.options.length; index++) {
-                const obj = {
-                    first: this.attributes.options[index][0],
-                    second: this.attributes.options[index][1],
-                    third: this.attributes.options[index][2],
-                };
-                arrayOfObjects.push(obj);
-            }
-            return arrayOfObjects;
+        optionList() {
+            return [].concat(...this.attributes.options);
         },
         display() {
             return this.attributes.display;
@@ -97,11 +96,9 @@ export default {
         error_text() {
             return this.alternateErrorText || this.attributes.error_text || "No options available";
         },
-        initialOption() {
-            return this.optionSelect[0];
-        },
     },
     created() {
+        this.currentValue = this.optionList[0];
         if (this.attributes.type == "data_column") {
             this.alternateErrorText = "Missing columns in referenced dataset.";
         }
