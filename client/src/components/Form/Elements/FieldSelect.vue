@@ -19,15 +19,21 @@
             {{ error_text }}
         </b-alert>
         <multiselect
-            v-else-if="optionList.length"
+            v-else-if="optionList.length && !display"
             v-model="currentValue"
             deselect-label="Can't remove this value"
             track-by="0"
             :options="optionList"
-            :searchable="true"
+            :searchable="this.attributes.searchable"
             :allow-empty="false">
             {{ currentValue }}>
         </multiselect>
+        <b-form-group label="label" v-else-if="display == checkboxes">
+            <b-form-checkbox-group
+                v-model="currentSelected"
+                :options="optionList"
+                stacked></b-form-checkbox-group>
+        </b-form-group>
     </div>
 </template>
 
@@ -70,8 +76,8 @@ export default {
             onchange: this.attributes.onchange,
             individual: this.attributes.individual,
             textable: this.attributes.textable,
-            SelectClass: null,
             alternateErrorText: null,
+            selected: [],
         };
     },
     computed: {
@@ -80,7 +86,14 @@ export default {
                 return this.value;
             },
             set(val) {
-                console.log("Value is: ", val);
+                this.$emit("input", val);
+            },
+        },
+        currentSelected: {
+            get() {
+                return this.selected;
+            },
+            set(val) {
                 this.$emit("input", val);
             },
         },
@@ -96,8 +109,12 @@ export default {
         error_text() {
             return this.alternateErrorText || this.attributes.error_text || "No options available";
         },
+        label() {
+            return this.attributes.label;
+        },
     },
     created() {
+        console.log("attributes == ", this.attributes);
         this.currentValue = this.optionList[0];
         if (this.attributes.type == "data_column") {
             this.alternateErrorText = "Missing columns in referenced dataset.";
@@ -112,12 +129,6 @@ export default {
                 this.searchable = false;
             }
         }
-        var classes = {
-            checkboxes: "checkbox",
-            radio: "radio",
-            radiobutton: "radiobutton",
-        };
-        this.SelectClass = classes[this.attributes.display] || "select";
     },
 };
 </script>
