@@ -139,14 +139,14 @@ onMounted(() => {
                 :active-tab="activeTab"
                 @open-url="emit('open-url', $event)" />
             <MastheadItem v-if="windowTab" :tab="windowTab" :toggle="windowToggle" @click="onWindowToggle" />
+            <BNavItem>
+                <HelpModeSwitch />
+            </BNavItem>
             <BNavItem
                 v-if="!isAnonymous && isConfigLoaded && config.enable_notification_system && !showActivityBar"
                 id="notifications-bell">
                 <NotificationsBell tooltip-placement="bottom" />
             </BNavItem>
-            <BNavForm>
-                <HelpModeSwitch />
-            </BNavForm>
         </BNavbarNav>
         <QuotaMeter />
     </BNavbar>
