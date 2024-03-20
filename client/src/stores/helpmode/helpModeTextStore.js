@@ -18,5 +18,8 @@ export const useHelpModeTextStore = defineStore("helpModeText", {
                     this.helpmodetext = text;
                 });
         },
+        clearHelpModeText() {
+            this.helpmodetext = "Welcome to Galaxy Help Mode!";
+        }
     },
 });

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDraggable } from "@vueuse/core";
 import MarkdownIt from "markdown-it";
-import { computed, ref } from "vue";
+import { computed, onMounted,ref } from "vue";
 
 import { useHelpModeStatusStore } from "@/stores/helpmode/helpModeStatusStore";
 import { useHelpModeTextStore } from "@/stores/helpmode/helpModeTextStore";
@@ -35,6 +35,17 @@ const el = ref<HTMLElement | null>(null);
 const { x, y, style } = useDraggable(el, {
     initialValue: { x: 0, y: 0 },
 });
+
+const helpTextRef = ref(null);
+
+onMounted(() => {
+    const links = (helpTextRef.value as unknown as HTMLElement).querySelectorAll('a');
+    links.forEach((link: HTMLAnchorElement) => {
+        link.setAttribute('target', '_blank');
+    });
+});
+
+
 </script>
 <template>
     <div
@@ -48,14 +59,14 @@ const { x, y, style } = useDraggable(el, {
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <div class="help-mode-container" v-html="helpText"></div>
+        <div ref="helpTextRef" class="help-mode-container" v-html="helpText"></div>
     </div>
 </template>
 <style>
 .helptext {
     display: flex;
     flex-direction: column;
-    width: 20% !important;
+    width: 25% !important;
     height: 30% !important;
     z-index: 9999;
     background-color: aliceblue;

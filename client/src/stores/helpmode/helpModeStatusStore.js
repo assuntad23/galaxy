@@ -1,5 +1,7 @@
 import { defineStore } from "pinia";
 
+import { useHelpModeTextStore } from "./helpModeTextStore";
+
 export const useHelpModeStatusStore = defineStore("helpModeStatusStore", {
     state: () => {
         return {
@@ -10,6 +12,9 @@ export const useHelpModeStatusStore = defineStore("helpModeStatusStore", {
     actions: {
         setHelpModeStatus(status) {
             this.helpmodestatus = status;
+            if (status == false) {
+                useHelpModeTextStore().clearHelpModeText();
+            }
         },
     },
 });
